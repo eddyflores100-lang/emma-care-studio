@@ -1,10 +1,13 @@
 // Emma Care Studio — store principal (zustand)
-// Incluye: estado del editor, reglas mágicas, motor de juego (IA de mascotas,
-// necesidades, monedas, partículas) y persistencia en localStorage.
+// Incluye: estado del editor, mundos/niveles con desbloqueo, reglas mágicas,
+// motor de juego (IA de mascotas, necesidades, monedas, partículas, VOCES)
+// y persistencia en localStorage.
 
 import { create } from 'zustand'
 import { toast } from 'sonner'
 import {
+  LevelId,
+  Mood,
   Particle,
   PetRuntime,
   PlayerAction,
@@ -15,14 +18,17 @@ import {
   WorldObject,
 } from './types'
 import {
+  LEVELS,
   PET_NAMES,
   STATS,
+  VOICES,
   catalogById,
   makeBlankProject,
   makeDemoProject,
+  makeLevelStarters,
   uid,
 } from './catalog'
-import { setMuted, sfx } from './sound'
+import { petVoice, setMuted, sfx } from './sound'
 
 const SAVE_KEY = 'emma-care-studio-v1'
 
@@ -54,8 +60,19 @@ function makeRuntime(): PetRuntime {
     facing: 1,
     sick: false,
     toyAt: 0,
+    voiceAt: 0,
     pairCd: {},
   }
+}
+
+/** Ánimo actual de una mascota: decide su voz y su cara */
+function moodOf(rt: PetRuntime): Mood {
+  if (rt.sick) return 'triste'
+  if (rt.stats.comida < 30) return 'hambre'
+  if (rt.stats.descanso < 30) return 'sueno'
+  if (rt.stats.felicidad < 25) return 'triste'
+  if (rt.stats.felicidad >= 85) return 'feliz'
+  return 'normal'
 }
 
 export type MobileTab = 'objetos' | 'ajustes' | 'reglas'
@@ -70,9 +87,14 @@ interface StudioState {
   mobileTab: MobileTab
   coins: number
   muted: boolean
+  /** mundo actual y mundos desbloqueados */
+  currentLevel: LevelId
+  unlockedLevels: LevelId[]
   /** runtime de mascotas (solo modo juego) */
   pets: Record<string, PetRuntime>
   particles: Particle[]
+  /** globos de voz activos por mascota (¡Guau!, ¡Miau...) */
+  say: Record<string, SayBubbleText>
   ruleAcc: Record<string, number>
   actionCd: Record<string, number>
   lastBonusAt: number
@@ -85,6 +107,8 @@ interface StudioState {
   /** selecciona y (en móvil) salta a la pestaña de ajustes */
   selectForEdit: (id: string) => void
   setMobileTab: (tab: MobileTab) => void
+  /** viaja a un mundo; si está cerrado, intenta desbloquearlo con monedas */
+  setLevel: (id: LevelId) => void
   startPlay: () => void
   stopPlay: () => void
   addRule: () => void
@@ -100,6 +124,9 @@ interface StudioState {
   gameTick: () => void
   spawnParticles: (emoji: string, x: number, y: number, n?: number) => void
 }
+
+/** texto del globo de voz */
+type SayBubbleText = { text: string; until: number }
 
 type StoreSet = (partial: Partial<StudioState>) => void
 type StoreGet = () => StudioState
@@ -117,6 +144,14 @@ function fireRule(set: StoreSet, get: StoreGet, rule: Rule, pet: WorldObject) {
   sfx.pop()
 }
 
+/** Haz que una mascota "hable": sonido de su especie + globo con la onomatopeya */
+function speak(set: StoreSet, get: StoreGet, pet: WorldObject, mood: Mood) {
+  petVoice(pet.catalogId, mood)
+  const text = VOICES[pet.catalogId]?.[mood]
+  if (!text) return
+  set({ say: { ...get().say, [pet.id]: { text, until: Date.now() + 2400 } } })
+}
+
 export const useStudio = create<StudioState>((set, get) => {
   // Mundo de bienvenida (se reemplaza por el proyecto guardado al hidratar)
   const demo = makeDemoProject()
@@ -130,8 +165,11 @@ export const useStudio = create<StudioState>((set, get) => {
     mobileTab: 'objetos',
     coins: 0,
     muted: false,
+    currentLevel: 'jardin',
+    unlockedLevels: ['jardin'],
     pets: {},
     particles: [],
+    say: {},
     ruleAcc: {},
     actionCd: {},
     lastBonusAt: 0,
@@ -143,11 +181,24 @@ export const useStudio = create<StudioState>((set, get) => {
         const raw = typeof window !== 'undefined' ? localStorage.getItem(SAVE_KEY) : null
         if (raw) {
           const data = JSON.parse(raw) as SavedProject
-          if (data && data.version === 1 && Array.isArray(data.objects)) {
+          const valid = data && Array.isArray(data.objects)
+          if (valid) {
+            // migración v1 → v2: los objetos sin mundo van al jardín
+            const objects = data.objects
+              .filter((o) => catalogById[o.catalogId])
+              .map((o) => ({ ...o, level: o.level ?? 'jardin' }))
+            const unlocked = (data.unlockedLevels ?? ['jardin']).filter((id) =>
+              LEVELS.some((l) => l.id === id),
+            )
             next = {
-              objects: data.objects.filter((o) => catalogById[o.catalogId]),
+              objects,
               rules: Array.isArray(data.rules) ? data.rules : [],
               coins: typeof data.coins === 'number' ? data.coins : 0,
+              unlockedLevels: unlocked.length ? unlocked : ['jardin'],
+              currentLevel:
+                data.currentLevel && unlocked.includes(data.currentLevel)
+                  ? data.currentLevel
+                  : 'jardin',
             }
           }
         } else {
@@ -185,9 +236,12 @@ export const useStudio = create<StudioState>((set, get) => {
         size: item.kind === 'pet' ? 1.3 : item.kind === 'home' ? 1.4 : 1.1,
         hue: 0,
         speed: item.kind === 'pet' ? 8 : undefined,
+        level: s.currentLevel,
       }
       if (s.mode === 'play' && item.kind === 'pet') {
-        set({ objects: [...s.objects, obj], pets: { ...s.pets, [obj.id]: makeRuntime() } })
+        const rt = makeRuntime()
+        rt.voiceAt = Date.now() + rand(1200, 4000)
+        set({ objects: [...s.objects, obj], pets: { ...s.pets, [obj.id]: rt } })
       } else {
         set({
           objects: [...s.objects, obj],
@@ -196,6 +250,10 @@ export const useStudio = create<StudioState>((set, get) => {
       }
       sfx.pop()
       toast(`${item.emoji} ¡${name} se unió al mundo!`)
+      if (item.kind === 'pet') {
+        // la mascota recién llegada saluda con su voz
+        speak(set, get, obj, 'feliz')
+      }
     },
 
     updateObject: (id, patch) => {
@@ -208,7 +266,10 @@ export const useStudio = create<StudioState>((set, get) => {
       set({
         objects: s.objects.filter((o) => o.id !== id),
         selectedId: s.selectedId === id ? null : s.selectedId,
-        pets: obj && isPetObj(obj) ? Object.fromEntries(Object.entries(s.pets).filter(([k]) => k !== id)) : s.pets,
+        pets:
+          obj && isPetObj(obj)
+            ? Object.fromEntries(Object.entries(s.pets).filter(([k]) => k !== id))
+            : s.pets,
       })
       sfx.click()
     },
@@ -219,19 +280,58 @@ export const useStudio = create<StudioState>((set, get) => {
 
     setMobileTab: (tab) => set({ mobileTab: tab }),
 
+    setLevel: (id) => {
+      const s = get()
+      const def = LEVELS.find((l) => l.id === id)
+      if (!def) return
+      if (s.unlockedLevels.includes(id)) {
+        if (s.currentLevel === id) return
+        set({ currentLevel: id, selectedId: null, say: {} })
+        sfx.pop()
+        toast(`${def.emoji} ¡Bienvenido/a a ${def.name}!`)
+        return
+      }
+      if (s.coins < def.cost) {
+        toast(`🔒 Te faltan ${def.cost - s.coins} 🪙 para abrir ${def.name}. ¡Cuida mascotas!`)
+        sfx.sad()
+        return
+      }
+      const starters = makeLevelStarters(id)
+      set({
+        coins: s.coins - def.cost,
+        unlockedLevels: [...s.unlockedLevels, id],
+        currentLevel: id,
+        objects: [...s.objects, ...starters],
+        selectedId: null,
+        say: {},
+      })
+      sfx.unlock()
+      get().spawnParticles('🎉', 50, 28, 2)
+      get().spawnParticles('✨', 38, 45, 2)
+      get().spawnParticles('⭐', 62, 45, 2)
+      toast(`🎉 ¡Nuevo mundo desbloqueado: ${def.emoji} ${def.name}!`, { duration: 5000 })
+    },
+
     startPlay: () => {
       const s = get()
+      const now = Date.now()
       const pets: Record<string, PetRuntime> = {}
       for (const o of s.objects) {
-        if (isPetObj(o)) pets[o.id] = makeRuntime()
+        if (isPetObj(o)) {
+          const rt = makeRuntime()
+          // cada mascota empieza a "hablar" en un momento distinto
+          rt.voiceAt = now + rand(1200, 6000)
+          pets[o.id] = rt
+        }
       }
       set({
         mode: 'play',
         pets,
         particles: [],
+        say: {},
         ruleAcc: {},
         actionCd: {},
-        lastBonusAt: Date.now(),
+        lastBonusAt: now,
         selectedId: null,
       })
       sfx.happy()
@@ -246,8 +346,7 @@ export const useStudio = create<StudioState>((set, get) => {
       }, 350)
     },
 
-    stopPlay: () =>
-      set({ mode: 'edit', pets: {}, particles: [], selectedId: null }),
+    stopPlay: () => set({ mode: 'edit', pets: {}, particles: [], say: {}, selectedId: null }),
 
     addRule: () => {
       const s = get()
@@ -278,11 +377,13 @@ export const useStudio = create<StudioState>((set, get) => {
     saveProject: () => {
       const s = get()
       const data: SavedProject = {
-        version: 1,
+        version: 2,
         objects: s.objects,
         rules: s.rules,
         coins: s.coins,
         savedAt: new Date().toISOString(),
+        unlockedLevels: s.unlockedLevels,
+        currentLevel: s.currentLevel,
       }
       try {
         localStorage.setItem(SAVE_KEY, JSON.stringify(data))
@@ -296,11 +397,13 @@ export const useStudio = create<StudioState>((set, get) => {
     exportProject: () => {
       const s = get()
       const data: SavedProject = {
-        version: 1,
+        version: 2,
         objects: s.objects,
         rules: s.rules,
         coins: s.coins,
         savedAt: new Date().toISOString(),
+        unlockedLevels: s.unlockedLevels,
+        currentLevel: s.currentLevel,
       }
       try {
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -325,7 +428,10 @@ export const useStudio = create<StudioState>((set, get) => {
         selectedId: null,
         pets: {},
         particles: [],
+        say: {},
         mode: 'edit',
+        currentLevel: 'jardin',
+        unlockedLevels: ['jardin'],
       })
       toast('🆕 ¡Mundo nuevo! Construye tu juego ✨')
       sfx.magic()
@@ -340,7 +446,18 @@ export const useStudio = create<StudioState>((set, get) => {
 
     buyShopItem: (itemId) => {
       const s = get()
-      const prices: Record<ShopItemId, number> = { cat: 40, rabbit: 60, toy: 30, cake: 15 }
+      const prices: Record<ShopItemId, number> = {
+        cake: 15,
+        toy: 30,
+        cat: 40,
+        rabbit: 60,
+        fox: 80,
+        pig: 90,
+        monkey: 100,
+        panda: 120,
+        bear: 140,
+        lion: 180,
+      }
       const price = prices[itemId]
       if (s.coins < price) {
         toast(`🪙 Te faltan ${price - s.coins} monedas. ¡Cuida a tus mascotas!`)
@@ -361,6 +478,7 @@ export const useStudio = create<StudioState>((set, get) => {
         }
         set({ coins: s.coins - price, pets: { ...s.pets, [sel.id]: rt } })
         get().spawnParticles('🎂', sel.x, sel.y - 3, 3)
+        speak(set, get, sel, 'feliz')
       } else if (itemId === 'toy') {
         const obj: WorldObject = {
           id: uid(),
@@ -371,14 +489,16 @@ export const useStudio = create<StudioState>((set, get) => {
           size: 1,
           hue: Math.floor(rand(0, 6)) * 60,
           speed: undefined,
+          level: s.currentLevel,
         }
         set({ coins: s.coins - price, objects: [...s.objects, obj] })
       } else {
+        // adoptar mascota nueva
         get().addObject(itemId, rand(35, 65), rand(50, 70))
         set({ coins: get().coins - price })
       }
       sfx.coin()
-      toast(`✨ ¡Compra feliz! −${price} 🪙`)
+      if (itemId !== 'cake') toast(`✨ ¡Compra feliz! −${price} 🪙`)
     },
 
     playerAction: (action) => {
@@ -461,6 +581,16 @@ export const useStudio = create<StudioState>((set, get) => {
         }
       }
 
+      // feedback de voz según la acción
+      if (action === 'dormir') {
+        if (rt.state === 'sleep') speak(set, get, pet, 'sueno')
+        else speak(set, get, pet, 'normal')
+      } else if (action === 'curar') {
+        speak(set, get, pet, 'feliz')
+      } else {
+        speak(set, get, pet, 'feliz')
+      }
+
       if (action !== 'dormir' && action !== 'curar' && !rt.sick) {
         const rewards: Record<string, number> = {
           alimentar: 3,
@@ -481,11 +611,16 @@ export const useStudio = create<StudioState>((set, get) => {
       const dt = Math.min(dtMs, 120) / 1000
       let moved = false
       const objects = s.objects.map((o) => ({ ...o }))
-      const pets: Record<string, PetRuntime> = {}
-      const petObjs = objects.filter(isPetObj)
+      const pets: Record<string, PetRuntime> = { ...s.pets }
+      // solo se simula el mundo visible; las mascotas de otros mundos descansan
+      const levelObjs = objects.filter((o) => o.level === s.currentLevel)
+      const petObjs = levelObjs.filter(isPetObj)
+      const food = findSpecial(levelObjs, 'food')
+      const bed = findSpecial(levelObjs, 'bed')
+      const toy = findSpecial(levelObjs, 'toy')
+      const bath = findSpecial(levelObjs, 'bath')
 
-      for (const obj of objects) {
-        if (!isPetObj(obj)) continue
+      for (const obj of petObjs) {
         const rt0 = s.pets[obj.id]
         if (!rt0) continue
         const rt: PetRuntime = { ...rt0, pairCd: { ...rt0.pairCd } }
@@ -509,8 +644,6 @@ export const useStudio = create<StudioState>((set, get) => {
 
         // decidir nuevo destino
         if (rt.state !== 'walk' && now >= rt.wanderAt) {
-          const food = findSpecial(objects, 'food')
-          const bed = findSpecial(objects, 'bed')
           if (rt.stats.comida < 50 && food) {
             rt.tx = food.x
             rt.ty = Math.min(95, food.y + 6)
@@ -553,7 +686,6 @@ export const useStudio = create<StudioState>((set, get) => {
         }
 
         // magia incorporada: juguete = alegría
-        const toy = findSpecial(objects, 'toy')
         if (toy && now >= rt.toyAt && Math.hypot(toy.x - obj.x, toy.y - obj.y) < 9) {
           rt.stats = { ...rt.stats, felicidad: clamp(rt.stats.felicidad + 3) }
           rt.toyAt = now + 6000
@@ -561,7 +693,6 @@ export const useStudio = create<StudioState>((set, get) => {
         }
 
         // magia incorporada: bañera = higiene
-        const bath = findSpecial(objects, 'bath')
         if (
           bath &&
           now >= (rt.pairCd['bath'] ?? 0) &&
@@ -576,19 +707,20 @@ export const useStudio = create<StudioState>((set, get) => {
         pets[obj.id] = rt
       }
 
-      // reglas del tipo "CUANDO se acerque a..."
+      // reglas del tipo "CUANDO se acerque a..." (misma mascota y mismo mundo)
       const fired: Array<[Rule, WorldObject]> = []
       for (const rule of s.rules) {
         if (rule.trigger !== 'cerca') continue
         const petTargets =
           rule.petId === 'cualquiera' ? petObjs : petObjs.filter((o) => o.id === rule.petId)
-        const objTargets =
-          rule.targetId === 'cualquiera'
-            ? objects.filter((o) => !isPetObj(o))
-            : objects.filter((o) => o.id === rule.targetId && !isPetObj(o))
         for (const pet of petTargets) {
           const rt = pets[pet.id]
           if (!rt) continue
+          const objTargets = levelObjs.filter(
+            (o) =>
+              !isPetObj(o) &&
+              (rule.targetId === 'cualquiera' || o.id === rule.targetId),
+          )
           for (const target of objTargets) {
             const key = `${rule.id}:${pet.id}:${target.id}`
             if (now - (rt.pairCd[key] ?? 0) < 4000) continue
@@ -610,14 +742,17 @@ export const useStudio = create<StudioState>((set, get) => {
       const s = get()
       if (s.mode !== 'play') return
       const now = Date.now()
-      const pets: Record<string, PetRuntime> = {}
+      const pets: Record<string, PetRuntime> = { ...s.pets }
       let coins = s.coins
       let lastBonusAt = s.lastBonusAt
 
-      for (const obj of s.objects) {
-        if (!isPetObj(obj)) continue
+      // solo decaen las mascotas del mundo actual (las demás descansan)
+      const activePets = s.objects.filter(
+        (o) => isPetObj(o) && o.level === s.currentLevel && s.pets[o.id],
+      )
+
+      for (const obj of activePets) {
         const rt0 = s.pets[obj.id]
-        if (!rt0) continue
         const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats } }
 
         if (rt.state === 'sleep') {
@@ -649,13 +784,22 @@ export const useStudio = create<StudioState>((set, get) => {
           get().spawnParticles('🤒', obj.x, obj.y - 5, 2)
           toast(`🤒 ¡${obj.name} se puso enfermo/a! Tócalo/a y usa 🏥 Curar`, { duration: 5000 })
           sfx.sad()
+          speak(set, get, obj, 'triste')
+        }
+
+        // ===== VOCES: cada mascota suena con su voz según su ánimo =====
+        if (now >= rt.voiceAt && rt.state !== 'sleep') {
+          speak(set, get, obj, moodOf(rt))
+          // cuantas más mascotas haya, más espaciadas las voces (sin cacofonía)
+          const spacing = Math.min(3, Math.max(1, activePets.length / 2))
+          rt.voiceAt = now + rand(9000, 17000) * spacing
         }
 
         pets[obj.id] = rt
       }
 
-      // bonus: todas las mascotas felices
-      const allPets = Object.values(pets)
+      // bonus: todas las mascotas del mundo están felices
+      const allPets = activePets.map((o) => pets[o.id]).filter(Boolean)
       if (
         allPets.length > 0 &&
         allPets.every((rt) => rt.stats.felicidad >= 80) &&
@@ -667,9 +811,15 @@ export const useStudio = create<StudioState>((set, get) => {
         sfx.coin()
       }
 
-      set({ pets, coins, lastBonusAt })
+      // limpiar globos de voz caducados (después de hablar: speak() pudo añadir)
+      const say: Record<string, SayBubbleText> = {}
+      for (const [pid, b] of Object.entries(get().say)) {
+        if (b.until > now) say[pid] = b
+      }
 
-      // reglas del tipo "CADA X segundos..."
+      set({ pets, coins, lastBonusAt, say })
+
+      // reglas del tipo "CADA X segundos..." (mascotas del mundo actual)
       const ruleAcc = { ...s.ruleAcc }
       let accChanged = false
       for (const rule of s.rules) {
@@ -678,10 +828,9 @@ export const useStudio = create<StudioState>((set, get) => {
         if (acc >= Math.max(5, rule.intervalSec)) {
           ruleAcc[rule.id] = 0
           accChanged = true
-          const targets =
-            rule.petId === 'cualquiera'
-              ? s.objects.filter(isPetObj)
-              : s.objects.filter((o) => o.id === rule.petId)
+          const targets = activePets.filter(
+            (o) => rule.petId === 'cualquiera' || o.id === rule.petId,
+          )
           for (const pet of targets) fireRule(set, get, rule, pet)
         } else {
           ruleAcc[rule.id] = acc

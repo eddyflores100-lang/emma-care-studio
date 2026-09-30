@@ -139,13 +139,78 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
-/* césped del mundo */
+/* césped del mundo (Jardín) */
 .grass {
   background-color: #a7f3d0;
   background-image:
     radial-gradient(circle at 25% 25%, rgba(52, 211, 153, 0.5) 12%, transparent 13%),
     radial-gradient(circle at 75% 75%, rgba(52, 211, 153, 0.5) 12%, transparent 13%);
   background-size: 34px 34px;
+}
+
+/* suelo de madera (mundo Casa) */
+.floor-casa {
+  background-color: #fcd9a0;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(146, 94, 48, 0.22) 0 2px, transparent 2px 36px),
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.3) 7%, transparent 8%);
+  background-size:
+    auto,
+    130px 130px;
+}
+.floor-casa::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 17%;
+  background: #fef3c7;
+  border-bottom: 4px solid rgba(180, 120, 60, 0.25);
+}
+
+/* suelo de clínica (mundo Hospital): cuadros menta */
+.floor-hospital {
+  background-color: #effcf9;
+  background-image:
+    linear-gradient(45deg, rgba(153, 246, 228, 0.55) 25%, transparent 25%, transparent 75%, rgba(153, 246, 228, 0.55) 75%),
+    linear-gradient(45deg, rgba(153, 246, 228, 0.55) 25%, transparent 25%, transparent 75%, rgba(153, 246, 228, 0.55) 75%);
+  background-size: 46px 46px;
+  background-position:
+    0 0,
+    23px 23px;
+}
+.floor-hospital::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 17%;
+  background: #f0fdfa;
+  border-bottom: 4px solid rgba(20, 184, 166, 0.3);
+}
+
+/* playa: franja de mar arriba + arena con puntitos */
+.floor-playa {
+  background-color: #fef3c7;
+  background-image:
+    linear-gradient(to bottom, #cffafe 0 17%, #99f6e4 17% 21%, transparent 21%),
+    radial-gradient(circle at 25% 55%, rgba(217, 119, 6, 0.16) 9%, transparent 10%);
+  background-size:
+    auto,
+    64px 64px;
+}
+
+/* globo de voz (¡Guau!, ¡Miau...) */
+@keyframes emma-say {
+  from {
+    transform: translateX(-50%) scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+    opacity: 1;
+  }
+}
+.say-pop {
+  animation: emma-say 0.18s ease-out;
 }
 
 /* partículas flotantes (corazones, comida, zzz...) */

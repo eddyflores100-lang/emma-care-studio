@@ -1,11 +1,28 @@
 // Emma Care Studio — modelo de datos
-// Un proyecto es: objetos en el mundo + reglas mágicas + monedas.
+// Un proyecto es: objetos por mundo (nivel) + reglas mágicas + monedas.
 // En modo juego, cada mascota tiene un "runtime" con sus estadísticas.
 
 export type ObjKind = 'pet' | 'home' | 'nature'
 
 /** Objetos con comportamiento mágico incorporado (comen, duermen, limpian...) */
 export type SpecialKind = 'food' | 'bed' | 'toy' | 'bath'
+
+/** Mundos/niveles del juego (se desbloquean con monedas) */
+export type LevelId = 'jardin' | 'casa' | 'hospital' | 'playa'
+
+/** Ánimo de la mascota: decide su voz y su cara */
+export type Mood = 'feliz' | 'hambre' | 'sueno' | 'normal' | 'triste'
+
+export interface LevelDef {
+  id: LevelId
+  name: string
+  emoji: string
+  desc: string
+  /** monedas necesarias para desbloquearlo (0 = gratis) */
+  cost: number
+  /** clase CSS del suelo del lienzo */
+  bg: string
+}
 
 export interface CatalogItem {
   id: string
@@ -28,6 +45,8 @@ export interface WorldObject {
   hue: number
   /** solo mascotas: velocidad en %/segundo */
   speed?: number
+  /** mundo al que pertenece el objeto */
+  level: LevelId
 }
 
 export type StatKey = 'felicidad' | 'comida' | 'energia' | 'higiene' | 'descanso'
@@ -63,6 +82,8 @@ export interface PetRuntime {
   facing: 1 | -1
   sick: boolean
   toyAt: number
+  /** timestamp (ms) de la próxima vocalización espontánea */
+  voiceAt: number
   /** cooldowns por pareja regla/mascota/objeto y objetos especiales */
   pairCd: Record<string, number>
 }
@@ -74,14 +95,33 @@ export interface Particle {
   y: number
 }
 
+/** Globo de voz: texto que dice una mascota (¡Guau!, ¡Miau...) */
+export interface SayBubble {
+  text: string
+  until: number
+}
+
 export interface SavedProject {
-  version: 1
+  /** v1 = sin mundos (todo jardín); v2 = con niveles y desbloqueos */
+  version: 1 | 2
   objects: WorldObject[]
   rules: Rule[]
   coins: number
   savedAt: string
+  unlockedLevels?: LevelId[]
+  currentLevel?: LevelId
 }
 
 export type PlayerAction = 'alimentar' | 'acariciar' | 'jugar' | 'banar' | 'dormir' | 'curar'
 
-export type ShopItemId = 'cat' | 'rabbit' | 'toy' | 'cake'
+export type ShopItemId =
+  | 'cake'
+  | 'toy'
+  | 'cat'
+  | 'rabbit'
+  | 'fox'
+  | 'pig'
+  | 'monkey'
+  | 'panda'
+  | 'bear'
+  | 'lion'

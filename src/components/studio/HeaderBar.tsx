@@ -32,9 +32,15 @@ function ShopDialog() {
 
   const items: { id: ShopItemId; emoji: string; name: string; desc: string; price: number }[] = [
     { id: 'cake', emoji: '🎂', name: 'Pastel', desc: 'Felicidad +25 a la mascota elegida', price: 15 },
-    { id: 'toy', emoji: '🧸', name: 'Juguete', desc: 'Aparecerá en el jardín', price: 30 },
-    { id: 'cat', emoji: '🐱', name: 'Adoptar gato', desc: 'Un nuevo amigo para casa', price: 40 },
-    { id: 'rabbit', emoji: '🐰', name: 'Adoptar conejo', desc: 'Un nuevo amigo saltarín', price: 60 },
+    { id: 'toy', emoji: '🧸', name: 'Juguete', desc: 'Aparecerá en el mundo actual', price: 30 },
+    { id: 'cat', emoji: '🐱', name: 'Adoptar gato', desc: 'Maúlla cuando tiene hambre', price: 40 },
+    { id: 'rabbit', emoji: '🐰', name: 'Adoptar conejo', desc: 'Un amigo saltarín y ruidoso', price: 60 },
+    { id: 'fox', emoji: '🦊', name: 'Adoptar zorro', desc: 'Hace ¡yip yip! de alegría', price: 80 },
+    { id: 'pig', emoji: '🐷', name: 'Adoptar cerdito', desc: 'Nunca para de hacer ¡oink!', price: 90 },
+    { id: 'monkey', emoji: '🐵', name: 'Adoptar monito', desc: 'Parlotea sin parar: ¡uja uja!', price: 100 },
+    { id: 'panda', emoji: '🐼', name: 'Adoptar panda', desc: 'Balbucea dulcemente: ¡brrr!', price: 120 },
+    { id: 'bear', emoji: '🐻', name: 'Adoptar oso', desc: 'Gruñe fuerte y ronca al dormir', price: 140 },
+    { id: 'lion', emoji: '🦁', name: 'Adoptar león', desc: 'Su rugido se oye en todo el mundo', price: 180 },
   ]
 
   return (

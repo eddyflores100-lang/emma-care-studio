@@ -21,13 +21,16 @@ export function PlayHUD() {
   const objects = useStudio((s) => s.objects)
   const petsMap = useStudio((s) => s.pets)
   const selectedId = useStudio((s) => s.selectedId)
+  const currentLevel = useStudio((s) => s.currentLevel)
   const select = useStudio((s) => s.select)
   const playerAction = useStudio((s) => s.playerAction)
   const actionCd = useStudio((s) => s.actionCd)
 
   if (mode !== 'play') return null
 
-  const pets = objects.filter((o) => catalogById[o.catalogId]?.kind === 'pet')
+  const pets = objects.filter(
+    (o) => catalogById[o.catalogId]?.kind === 'pet' && o.level === currentLevel,
+  )
   const sel = pets.find((p) => p.id === selectedId) ?? null
   const rt = sel ? petsMap[sel.id] : null
   const now = Date.now()
@@ -51,7 +54,7 @@ export function PlayHUD() {
         <span className="hidden shrink-0 text-xs font-black text-slate-400 sm:inline">MASCOTAS:</span>
         {pets.length === 0 && (
           <span className="text-xs font-bold text-slate-400">
-            No hay mascotas — ve a ✏️ Editar para añadir una 🐶
+            No hay mascotas en este mundo — ve a ✏️ Editar para añadir una 🐶
           </span>
         )}
         {pets.map((p) => {

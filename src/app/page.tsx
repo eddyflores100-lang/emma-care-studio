@@ -10,6 +10,8 @@
 import { useEffect } from 'react'
 import { useStudio } from '@/lib/studio/store'
 import { HeaderBar } from '@/components/studio/HeaderBar'
+import { LevelBar } from '@/components/studio/LevelBar'
+import { IntroSplash } from '@/components/studio/IntroSplash'
 import { LibraryPanel } from '@/components/studio/LibraryPanel'
 import { WorldCanvas } from '@/components/studio/WorldCanvas'
 import { PropertiesPanel } from '@/components/studio/PropertiesPanel'
@@ -51,6 +53,8 @@ export default function Home() {
   return (
     <main className="flex h-[100dvh] flex-col overflow-hidden bg-[#FFF7ED]">
       <HeaderBar />
+      <LevelBar />
+      <IntroSplash />
 
       {mode === 'edit' ? (
         <>

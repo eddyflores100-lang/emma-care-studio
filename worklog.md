@@ -40,3 +40,24 @@ Work Log:
 Stage Summary:
 - App 100% responsive: móvil con pestañas táctiles, tablet con lienzo grande, escritorio con columnas
 - Capturas en /home/z/my-project/download/: m1-editor.png, m2-ajustes.png, m3-reglas.png, m4-play.png, m5-play-pet.png, m6-desktop.png, m7b-tablet.png
+
+---
+Task ID: 3
+Agent: Super Z (main)
+Task: Ampliar Emma Care Studio: 9 mascotas, 32 objetos, 4 niveles/mundos, voces por animal, expresiones y portada web lista para compartir
+
+Work Log:
+- types.ts: LevelId (jardin/casa/hospital/playa), Mood, WorldObject.level, PetRuntime.voiceAt, SayBubble, SavedProject v2 (unlockedLevels/currentLevel), ShopItemId x10
+- catalog.ts: 9 mascotas (🐶🐱🐰🦊🐻🐼🦁🐷🐵), 13 objetos nuevos (sofá, lámpara, TV, silla, puerta, medicina, pino, girasol, cactus, arbusto, fuente, palmera, sombrilla, concha), LEVELS con costes (0/60/120/200), VOICES onomatopeyas por ánimo, PET_NAMES nuevos, makeLevelStarters()
+- sound.ts: motor de voces WebAudio por especie × 5 ánimos (ladrido, maullido, purr, squeak, yip, gruñido, rugido, oink, parloteo, balido, ronquido, bostezo, lamento) + helpers slide/noise + sfx.unlock()
+- store.ts: setLevel (viajar/desbloquear con monedas + starters + fanfarria), speak() (voz + globo), voces ambientales en gameTick con espaciado según nº mascotas, migración v1→v2, simulación solo del mundo visible (otros pausan), reglas cerca/cada filtradas por nivel, tienda 10 artículos, bugfix: set final de gameTick sobrescribía say
+- WorldCanvas: fondo por mundo (grass/floor-casa/floor-hospital/floor-playa), decoración por nivel, caras de ánimo (😊😟🥱😪🤢😢🤒😋), globos de voz .say-pop, filtro de objetos por nivel
+- Nuevos componentes: LevelBar (chips de mundos con candado+coste), IntroSplash (portada 1ª visita con desfile de mascotas + JUGAR AHORA)
+- HeaderBar tienda ampliada; PlayHUD filtra mascotas por nivel; page.tsx añade LevelBar+IntroSplash; layout.tsx metadata OG para compartir
+- globals.css: fondos madera/menta checker/playa con mar, animación emma-say
+- Verificado con agent-browser: portada→JUGAR OK, 9 mascotas en biblioteca, alimentar→"¡Guau guau! 🎉"+3🪙, voces ambientales ("¡Miau!"), desbloqueo Casa/Hospital/Playa con fondos y muebles iniciales correctos, juego en Playa (Luna), caras de ánimo visibles, tienda 10 artículos, móvil 390px editor+juego, splash→modo juego, lint limpio, cero errores JS
+- Capturas en /home/z/my-project/download/: emma2-portada, emma2-casa, emma2-hospital, emma2-playa, emma2-playa-juego, emma2-final, emma2-movil-editor, emma2-movil-juego, emma2-tienda
+
+Stage Summary:
+- Emma Care Studio v0.2: 9 mascotas con voz y carácter, 4 mundos progresivos, economía→desbloqueo, portada compartible
+- Fix crítico: globos de voz se sobrescribían en gameTick (set final usaba copia antigua)

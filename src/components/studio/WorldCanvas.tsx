@@ -3,11 +3,13 @@
 // Lienzo del mundo: aquí se colocan los objetos (editor) y viven las
 // mascotas (modo juego). Soporta arrastrar desde la biblioteca (HTML5 DnD)
 // y mover objetos ya colocados (pointer events, funciona con táctil).
+// El fondo cambia según el mundo/nivel activo y las mascotas muestran
+// caras de ánimo y globos de voz (¡Guau!, ¡Miau...).
 
 import React, { useRef } from 'react'
 import { useStudio } from '@/lib/studio/store'
-import { catalogById } from '@/lib/studio/catalog'
-import { WorldObject } from '@/lib/studio/types'
+import { catalogById, levelById } from '@/lib/studio/catalog'
+import { PetRuntime, WorldObject } from '@/lib/studio/types'
 import { sfx } from '@/lib/studio/sound'
 import { cn } from '@/lib/utils'
 
@@ -17,8 +19,21 @@ function hueFilter(hue: number) {
   return hue ? `hue-rotate(${hue}deg) saturate(1.25)` : undefined
 }
 
+/** Cara de la mascota según su estado (expresiones para todos los animales) */
+function petFace(rt: PetRuntime): string | null {
+  if (rt.state === 'sleep' || rt.state === 'eat') return null // tienen su propio símbolo
+  if (rt.sick) return '🤒'
+  if (rt.stats.comida < 25) return '😟'
+  if (rt.stats.descanso < 25) return '🥱'
+  if (rt.stats.energia < 20) return '😪'
+  if (rt.stats.higiene < 25) return '🤢'
+  if (rt.stats.felicidad < 25) return '😢'
+  if (rt.stats.felicidad >= 85) return '😊'
+  return null
+}
+
 /** Burbuja de petición cuando una necesidad está crítica */
-function petBubble(rt: { stats: Record<string, number>; state: string }): string | null {
+function petBubble(rt: PetRuntime): string | null {
   if (rt.state === 'sleep') return null
   if (rt.stats.comida < 20) return '🍖!'
   if (rt.stats.descanso < 20) return '😴!'
@@ -35,11 +50,18 @@ export function WorldCanvas() {
   const objects = useStudio((s) => s.objects)
   const pets = useStudio((s) => s.pets)
   const particles = useStudio((s) => s.particles)
+  const say = useStudio((s) => s.say)
   const selectedId = useStudio((s) => s.selectedId)
+  const currentLevel = useStudio((s) => s.currentLevel)
   const select = useStudio((s) => s.select)
   const selectForEdit = useStudio((s) => s.selectForEdit)
   const addObject = useStudio((s) => s.addObject)
   const updateObject = useStudio((s) => s.updateObject)
+
+  const levelDef = levelById[currentLevel]
+  const now = Date.now()
+  // solo se ven los objetos del mundo activo
+  const visible = objects.filter((o) => o.level === currentLevel)
 
   function pointFromClient(clientX: number, clientY: number) {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -106,32 +128,81 @@ export function WorldCanvas() {
   return (
     <div
       ref={canvasRef}
-      className="grass relative h-full w-full overflow-hidden rounded-3xl border-4 border-white shadow-md select-none"
+      className={cn(
+        'relative h-full w-full overflow-hidden rounded-3xl border-4 border-white shadow-md select-none',
+        levelDef?.bg ?? 'grass',
+      )}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
       onClick={() => select(null)}
       role="application"
-      aria-label="Mundo del juego"
+      aria-label={`Mundo del juego: ${levelDef?.name ?? 'Jardín'}`}
     >
-      {/* decoración del cielo */}
-      <div className="pointer-events-none absolute top-3 left-5 text-3xl opacity-80" aria-hidden>
-        ☁️
-      </div>
-      <div className="pointer-events-none absolute top-8 right-12 text-2xl opacity-70" aria-hidden>
-        ☁️
-      </div>
-      <div className="pointer-events-none absolute top-2 right-1/3 text-2xl" aria-hidden>
-        ☀️
-      </div>
+      {/* decoración según el mundo */}
+      {currentLevel === 'jardin' && (
+        <>
+          <div className="pointer-events-none absolute top-3 left-5 text-3xl opacity-80" aria-hidden>
+            ☁️
+          </div>
+          <div className="pointer-events-none absolute top-8 right-12 text-2xl opacity-70" aria-hidden>
+            ☁️
+          </div>
+          <div className="pointer-events-none absolute top-2 right-1/3 text-2xl" aria-hidden>
+            ☀️
+          </div>
+        </>
+      )}
+      {currentLevel === 'casa' && (
+        <>
+          <div className="pointer-events-none absolute top-3 left-6 text-3xl opacity-80" aria-hidden>
+            🖼️
+          </div>
+          <div className="pointer-events-none absolute top-3 right-8 text-3xl opacity-80" aria-hidden>
+            🪟
+          </div>
+          <div className="pointer-events-none absolute top-4 right-1/3 text-2xl opacity-70" aria-hidden>
+            🕰️
+          </div>
+        </>
+      )}
+      {currentLevel === 'hospital' && (
+        <>
+          <div className="pointer-events-none absolute top-3 left-6 text-3xl opacity-80" aria-hidden>
+            🩺
+          </div>
+          <div className="pointer-events-none absolute top-3 right-8 text-3xl opacity-80" aria-hidden>
+            🧪
+          </div>
+          <div className="pointer-events-none absolute top-2 right-1/3 text-3xl" aria-hidden>
+            ➕
+          </div>
+        </>
+      )}
+      {currentLevel === 'playa' && (
+        <>
+          <div className="pointer-events-none absolute top-2 right-8 text-3xl" aria-hidden>
+            ☀️
+          </div>
+          <div className="pointer-events-none absolute top-4 left-8 text-3xl opacity-90" aria-hidden>
+            ⛵
+          </div>
+          <div className="pointer-events-none absolute top-7 left-1/3 text-2xl opacity-70" aria-hidden>
+            🌊
+          </div>
+        </>
+      )}
 
       {/* objetos del mundo */}
-      {objects.map((obj) => {
+      {visible.map((obj) => {
         const item = catalogById[obj.catalogId]
         if (!item) return null
         const isPet = item.kind === 'pet'
         const rt = mode === 'play' ? pets[obj.id] : undefined
         const selected = selectedId === obj.id
         const bubble = rt ? petBubble(rt) : null
+        const face = rt ? petFace(rt) : null
+        const voice = isPet ? say[obj.id] : undefined
+        const voiceText = voice && voice.until > now ? voice.text : null
         return (
           <div
             key={obj.id}
@@ -192,14 +263,25 @@ export function WorldCanvas() {
                 😋
               </span>
             )}
-            {rt?.sick && (
-              <span className="absolute -top-3 -left-2 text-lg" aria-hidden>
-                🤒
+            {/* cara de ánimo (hambre, sueño, suciedad, tristeza, alegría...) */}
+            {face && (
+              <span className="absolute -top-3 -left-2 text-lg drop-shadow" aria-hidden>
+                {face}
               </span>
             )}
+            {/* globo de petición de cuidado */}
             {bubble && (
               <span className="absolute -top-7 left-1/2 -translate-x-1/2 animate-bounce rounded-full bg-white px-2 py-0.5 text-sm font-black shadow-md">
                 {bubble}
+              </span>
+            )}
+            {/* globo de voz: ¡Guau!, ¡Miau... (acompaña al sonido) */}
+            {voiceText && !bubble && (
+              <span
+                className="say-pop absolute -top-8 left-1/2 -translate-x-1/2 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-xs font-black whitespace-nowrap text-slate-700 shadow-md"
+                aria-hidden
+              >
+                {voiceText}
               </span>
             )}
             {/* nombre (solo editor) */}
@@ -225,7 +307,7 @@ export function WorldCanvas() {
       ))}
 
       {/* pista cuando el mundo está vacío */}
-      {objects.length === 0 && (
+      {visible.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
           <span className="text-5xl" aria-hidden>
             🌟

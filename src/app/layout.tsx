@@ -14,12 +14,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Emma Care Studio 🎮 | Crea tu juego de mascotas",
+  title: "Emma Care Studio 🎮🐾 | Crea tu juego de mascotas",
   description:
-    "Editor de juegos visual para niños: arrastra, suelta, crea reglas mágicas y juega con tus mascotas. Sin programar, desde el navegador.",
-  keywords: ["juegos para niños", "editor visual", "mascotas", "Emma Care", "bloques"],
+    "El juego de mascotas de Emma: 9 animales con voces y expresiones, 4 mundos (Jardín, Casa, Hospital y Playa), monedas, tienda y reglas mágicas. Sin instalar nada, desde el navegador.",
+  keywords: ["juegos para niños", "mascotas", "Emma Care", "mundo abierto", "sonidos de animales"],
   icons: {
     icon: "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>",
+  },
+  openGraph: {
+    title: "Emma Care Studio 🎮🐾",
+    description:
+      "9 mascotas con sonidos reales, 4 mundos por desbloquear y miles de reglas mágicas. ¡Entra a jugar!",
+    locale: "es_ES",
+    type: "website",
   },
 };
 
