@@ -193,7 +193,14 @@ function RuleCard({ rule }: { rule: Rule }) {
   )
 }
 
-export function RulesPanel() {
+export function RulesPanel({
+  className,
+  fill = false,
+}: {
+  className?: string
+  /** fill=true: ocupa toda la altura (pestaña móvil) en vez de bloque inferior */
+  fill?: boolean
+}) {
   const mode = useStudio((s) => s.mode)
   const rules = useStudio((s) => s.rules)
   const addRule = useStudio((s) => s.addRule)
@@ -202,10 +209,19 @@ export function RulesPanel() {
 
   return (
     <section
-      className="shrink-0 px-3 pb-3"
+      className={cn(
+        'px-3 pb-3',
+        fill ? 'flex min-h-0 flex-1 flex-col' : 'safe-b shrink-0',
+        className,
+      )}
       aria-label="Reglas mágicas"
     >
-      <div className="thin-scroll max-h-[34vh] overflow-y-auto rounded-3xl border-2 border-violet-100 bg-violet-50/60 p-3 shadow-sm">
+      <div
+        className={cn(
+          'thin-scroll overflow-y-auto rounded-3xl border-2 border-violet-100 bg-violet-50/60 p-3 shadow-sm',
+          fill ? 'min-h-0 flex-1' : 'max-h-[34vh]',
+        )}
+      >
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h2 className="text-sm font-black tracking-wide text-violet-700">
             🧩 REGLAS MÁGICAS

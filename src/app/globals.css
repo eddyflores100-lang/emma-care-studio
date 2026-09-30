@@ -124,6 +124,21 @@
 
 /* ===== Emma Care Studio ===== */
 
+/* táctil: sin doble-tap-zoom en botones y sin pull-to-refresh */
+button,
+select {
+  touch-action: manipulation;
+}
+html,
+body {
+  overscroll-behavior: none;
+}
+
+/* respeta la barra inferior de iPhone (safe area) */
+.safe-b {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
 /* césped del mundo */
 .grass {
   background-color: #a7f3d0;

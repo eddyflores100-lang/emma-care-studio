@@ -94,16 +94,16 @@ export function HeaderBar() {
   const toggleMute = useStudio((s) => s.toggleMute)
 
   return (
-    <header className="flex shrink-0 items-center justify-between gap-2 border-b-2 border-rose-100 bg-white/85 px-3 py-2.5 backdrop-blur sm:px-4">
-      <div className="flex min-w-0 items-center gap-2">
+    <header className="flex shrink-0 items-center justify-between gap-1.5 border-b-2 border-rose-100 bg-white/85 px-2.5 py-2.5 backdrop-blur sm:gap-2 sm:px-4">
+      <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
         <span className="text-2xl" aria-hidden>
           🎮
         </span>
-        <h1 className="truncate text-base font-black tracking-tight sm:text-lg">
+        <h1 className="truncate text-sm font-black tracking-tight sm:text-lg">
           <span className="text-rose-500">EMMA</span> <span className="text-amber-500">CARE</span>{' '}
           <span className="text-emerald-600">STUDIO</span>
         </h1>
-        <span className="hidden text-xs font-bold text-slate-400 md:inline">
+        <span className="hidden text-xs font-bold text-slate-400 lg:inline">
           {mode === 'edit' ? '✏️ editor de juegos para niños' : '🐾 modo juego'}
         </span>
       </div>
@@ -115,7 +115,7 @@ export function HeaderBar() {
               <AlertDialogTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="rounded-full text-lg"
+                  className="hidden rounded-full text-lg sm:inline-flex"
                   title="Empezar un mundo nuevo"
                   aria-label="Nuevo proyecto"
                 >
@@ -148,7 +148,7 @@ export function HeaderBar() {
             <Button
               variant="ghost"
               onClick={exportProject}
-              className="rounded-full text-lg"
+              className="hidden rounded-full text-lg sm:inline-flex"
               title="Descargar proyecto en JSON"
               aria-label="Descargar proyecto"
             >
@@ -157,7 +157,7 @@ export function HeaderBar() {
 
             <Button
               onClick={saveProject}
-              className="rounded-full bg-emerald-500 font-black text-white hover:bg-emerald-600"
+              className="rounded-full bg-emerald-500 px-3 font-black text-white hover:bg-emerald-600 sm:px-4"
               title="Guardar proyecto"
             >
               💾 <span className="hidden sm:inline">Guardar</span>
@@ -165,7 +165,7 @@ export function HeaderBar() {
 
             <Button
               onClick={startPlay}
-              className="rounded-full bg-rose-500 px-4 font-black text-white shadow-lg shadow-rose-200 transition-transform hover:bg-rose-600 hover:shadow-rose-300 active:scale-95 sm:px-6"
+              className="rounded-full bg-rose-500 px-3 font-black text-white shadow-lg shadow-rose-200 transition-transform hover:bg-rose-600 hover:shadow-rose-300 active:scale-95 sm:px-6"
             >
               ▶️ ¡JUGAR!
             </Button>

@@ -21,3 +21,22 @@ Stage Summary:
 - Loop completo probado: crear mundo → reglas → jugar → ganar monedas → tienda → adoptar mascotas
 - Capturas en /home/z/my-project/download/: emma-editor.png, emma-play.png, emma-tienda.png, emma-mobile.png
 - Siguientes pasos sugeridos: exportar a Roblox (v0.2), importar assets (v0.3), asistente IA (v1)
+
+---
+Task ID: 2
+Agent: Super Z (main)
+Task: Hacer Emma Care Studio fully responsive (página web + móvil)
+
+Work Log:
+- store.ts: añadido mobileTab ('objetos'|'ajustes'|'reglas') + selectForEdit() que salta a Ajustes al tocar un objeto
+- WorldCanvas: usa selectForEdit en modo edición (auto-navega a propiedades en móvil)
+- page.tsx reescrito: móvil/tablet (<lg) = lienzo 42vh + Tabs (Objetos/Ajustes/Reglas); escritorio (lg+) = 3 columnas + reglas abajo (ambos layouts por CSS, sin JS de media queries)
+- RulesPanel: props className/fill para modo pestaña (h-full) o bloque inferior (max-h-34vh + safe-area)
+- PlayHUD móvil: etiquetas de stats solo-emoji en <sm, botones h-14/sm:h-16, safe-b, hint oculto en móvil
+- HeaderBar: subtítulo oculto <lg, botones 🆕/⬇️ ocultos <sm, gaps y paddings reducidos
+- globals.css: touch-action manipulation en botones/selects, overscroll-behavior none, .safe-b (env safe-area-inset-bottom)
+- Verificado con agent-browser: 390px (editor tabs, tap→Ajustes, juego, alimentar, cooldown, bonus +2🪙), 820px tablet, 1280px escritorio intacto; lint limpio; cero errores JS
+
+Stage Summary:
+- App 100% responsive: móvil con pestañas táctiles, tablet con lienzo grande, escritorio con columnas
+- Capturas en /home/z/my-project/download/: m1-editor.png, m2-ajustes.png, m3-reglas.png, m4-play.png, m5-play-pet.png, m6-desktop.png, m7b-tablet.png

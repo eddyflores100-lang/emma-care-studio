@@ -58,12 +58,16 @@ function makeRuntime(): PetRuntime {
   }
 }
 
+export type MobileTab = 'objetos' | 'ajustes' | 'reglas'
+
 interface StudioState {
   hydrated: boolean
   mode: 'edit' | 'play'
   objects: WorldObject[]
   rules: Rule[]
   selectedId: string | null
+  /** pestaña activa del editor en móvil (pantallas < lg) */
+  mobileTab: MobileTab
   coins: number
   muted: boolean
   /** runtime de mascotas (solo modo juego) */
@@ -78,6 +82,9 @@ interface StudioState {
   updateObject: (id: string, patch: Partial<WorldObject>) => void
   removeObject: (id: string) => void
   select: (id: string | null) => void
+  /** selecciona y (en móvil) salta a la pestaña de ajustes */
+  selectForEdit: (id: string) => void
+  setMobileTab: (tab: MobileTab) => void
   startPlay: () => void
   stopPlay: () => void
   addRule: () => void
@@ -120,6 +127,7 @@ export const useStudio = create<StudioState>((set, get) => {
     objects: demo.objects,
     rules: demo.rules,
     selectedId: null,
+    mobileTab: 'objetos',
     coins: 0,
     muted: false,
     pets: {},
@@ -206,6 +214,10 @@ export const useStudio = create<StudioState>((set, get) => {
     },
 
     select: (id) => set({ selectedId: id }),
+
+    selectForEdit: (id) => set({ selectedId: id, mobileTab: 'ajustes' }),
+
+    setMobileTab: (tab) => set({ mobileTab: tab }),
 
     startPlay: () => {
       const s = get()

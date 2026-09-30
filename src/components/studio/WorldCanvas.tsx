@@ -37,6 +37,7 @@ export function WorldCanvas() {
   const particles = useStudio((s) => s.particles)
   const selectedId = useStudio((s) => s.selectedId)
   const select = useStudio((s) => s.select)
+  const selectForEdit = useStudio((s) => s.selectForEdit)
   const addObject = useStudio((s) => s.addObject)
   const updateObject = useStudio((s) => s.updateObject)
 
@@ -60,7 +61,7 @@ export function WorldCanvas() {
   function pointerDown(e: React.PointerEvent, obj: WorldObject) {
     if (mode !== 'edit') return
     e.stopPropagation()
-    select(obj.id)
+    selectForEdit(obj.id)
     const rect = canvasRef.current?.getBoundingClientRect()
     if (!rect) return
     dragRef.current = {

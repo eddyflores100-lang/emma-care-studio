@@ -2,6 +2,10 @@
 
 // Emma Care Studio — página principal
 // Editor visual de juegos para niños: arrastra → suelta → configura → juega.
+//
+// Responsive:
+//  · Móvil/tablet (<lg): lienzo arriba (40vh) + pestañas 🧸 Objetos / ⚙️ Ajustes / 🧩 Reglas
+//  · Escritorio (lg+): biblioteca | lienzo | propiedades en columnas + reglas abajo
 
 import { useEffect } from 'react'
 import { useStudio } from '@/lib/studio/store'
@@ -11,9 +15,12 @@ import { WorldCanvas } from '@/components/studio/WorldCanvas'
 import { PropertiesPanel } from '@/components/studio/PropertiesPanel'
 import { RulesPanel } from '@/components/studio/RulesPanel'
 import { PlayHUD } from '@/components/studio/PlayHUD'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export default function Home() {
   const mode = useStudio((s) => s.mode)
+  const mobileTab = useStudio((s) => s.mobileTab)
+  const setMobileTab = useStudio((s) => s.setMobileTab)
 
   // cargar proyecto guardado al abrir
   useEffect(() => {
@@ -47,15 +54,53 @@ export default function Home() {
 
       {mode === 'edit' ? (
         <>
-          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 pb-3 lg:flex-row lg:overflow-hidden">
-            <WorldCanvasWrapper />
-            <LibraryPanel className="order-2 max-h-64 shrink-0 lg:order-1 lg:w-52 lg:max-h-none" />
-            <PropertiesPanel className="order-3 max-h-80 shrink-0 lg:w-64 lg:max-h-none" />
+          {/* ===== Móvil / tablet: lienzo + pestañas ===== */}
+          <div className="flex min-h-0 flex-1 flex-col lg:hidden">
+            <div className="h-[42vh] min-h-[250px] shrink-0 px-3 pt-3">
+              <WorldCanvas />
+            </div>
+            <Tabs
+              value={mobileTab}
+              onValueChange={(v) => setMobileTab(v as typeof mobileTab)}
+              className="flex min-h-0 flex-1 flex-col pt-3"
+            >
+              <TabsList className="mx-3 grid h-11 w-auto shrink-0 grid-cols-3 rounded-full bg-rose-100 p-1">
+                <TabsTrigger value="objetos" className="rounded-full text-xs font-black">
+                  🧸 Objetos
+                </TabsTrigger>
+                <TabsTrigger value="ajustes" className="rounded-full text-xs font-black">
+                  ⚙️ Ajustes
+                </TabsTrigger>
+                <TabsTrigger value="reglas" className="rounded-full text-xs font-black">
+                  🧩 Reglas
+                </TabsTrigger>
+              </TabsList>
+              <TabsContent value="objetos" className="mt-3 min-h-0 flex-1 px-3">
+                <LibraryPanel className="h-full" />
+              </TabsContent>
+              <TabsContent value="ajustes" className="mt-3 min-h-0 flex-1 px-3">
+                <PropertiesPanel className="h-full" />
+              </TabsContent>
+              <TabsContent value="reglas" className="mt-3 min-h-0 flex-1">
+                <RulesPanel fill className="h-full" />
+              </TabsContent>
+            </Tabs>
           </div>
-          <RulesPanel />
+
+          {/* ===== Escritorio: tres columnas + reglas abajo ===== */}
+          <div className="hidden min-h-0 flex-1 lg:flex lg:flex-row lg:gap-3 lg:p-3 lg:pb-0">
+            <LibraryPanel className="w-52 shrink-0" />
+            <div className="min-h-0 min-w-0 flex-1">
+              <WorldCanvas />
+            </div>
+            <PropertiesPanel className="w-64 shrink-0" />
+          </div>
+          <div className="hidden lg:block">
+            <RulesPanel />
+          </div>
         </>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-2 p-3 sm:gap-3 sm:p-3">
           <div className="min-h-0 flex-1">
             <WorldCanvas />
           </div>
@@ -63,14 +108,5 @@ export default function Home() {
         </div>
       )}
     </main>
-  )
-}
-
-/** Contenedor del lienzo: primero en pantallas pequeñas, centro en grandes */
-function WorldCanvasWrapper() {
-  return (
-    <div className="order-1 min-h-[340px] flex-1 lg:order-2 lg:min-h-0">
-      <WorldCanvas />
-    </div>
   )
 }

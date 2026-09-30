@@ -43,12 +43,12 @@ export function PlayHUD() {
 
   return (
     <section
-      className="shrink-0 rounded-3xl border-2 border-rose-100 bg-white p-3 shadow-md"
+      className="safe-b shrink-0 rounded-3xl border-2 border-rose-100 bg-white p-2.5 shadow-md sm:p-3"
       aria-label="Cuidado de mascotas"
     >
       {/* selector de mascotas */}
       <div className="thin-scroll mb-2 flex items-center gap-1.5 overflow-x-auto pb-1">
-        <span className="shrink-0 text-xs font-black text-slate-400">MASCOTAS:</span>
+        <span className="hidden shrink-0 text-xs font-black text-slate-400 sm:inline">MASCOTAS:</span>
         {pets.length === 0 && (
           <span className="text-xs font-bold text-slate-400">
             No hay mascotas — ve a ✏️ Editar para añadir una 🐶
@@ -101,7 +101,7 @@ export function PlayHUD() {
                       low ? 'text-rose-500' : 'text-slate-500',
                     )}
                   >
-                    {cfg.emoji} {cfg.label}
+                    {cfg.emoji} <span className="hidden sm:inline">{cfg.label}</span>
                   </span>
                 </div>
               )
@@ -121,7 +121,7 @@ export function PlayHUD() {
                   onClick={() => playerAction(a.id)}
                   disabled={disabled}
                   className={cn(
-                    'flex h-16 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 font-black transition-all active:scale-95',
+                    'flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 font-black transition-all active:scale-95 sm:h-16',
                     disabled
                       ? 'border-slate-100 bg-slate-50 opacity-40'
                       : 'border-amber-200 bg-white hover:bg-amber-50',
@@ -137,7 +137,7 @@ export function PlayHUD() {
                 onClick={() => playerAction('curar')}
                 disabled={cooling('curar')}
                 className={cn(
-                  'flex h-16 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 font-black transition-all active:scale-95',
+                  'flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 font-black transition-all active:scale-95 sm:h-16',
                   cooling('curar')
                     ? 'border-slate-100 bg-slate-50 opacity-40'
                     : 'border-teal-300 bg-teal-50 hover:bg-teal-100',
@@ -149,7 +149,7 @@ export function PlayHUD() {
             )}
           </div>
 
-          <p className="mt-2 text-center text-[11px] font-bold text-slate-400">
+          <p className="mt-2 hidden text-center text-[11px] font-bold text-slate-400 sm:block">
             🪙 Gana monedas cuidando a {sel.name} · gástalas en la 🛍 Tienda
           </p>
         </>
