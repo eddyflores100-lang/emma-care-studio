@@ -189,3 +189,5 @@ Work Log:
 
 Stage Summary:
 - Build estático OK; pendiente push + PUT del dominio cuando el certificado exista
+- Push 1a7148d → Actions success; emmacare.alicelabs.site HTTP 200 con hydrate verificado (window.__emma presente, 0 errores)
+- CNAME configurado vía API (PUT /pages, 204) tras provisionar el certificado; pendiente opcional: enforce HTTPS si aún no aplica
