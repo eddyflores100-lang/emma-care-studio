@@ -38,6 +38,23 @@
 - **Niveles de mascota** (Nv.1 → Nv.9): cada cuidado bien hecho da XP. Al subir de nivel: fiesta 🎉, +10🪙 y todas sus barras se llenan un poco.
 - Cuando corren mucho **se cansan** ⚡ y van solitas a buscar **agua** 💧 o **comida** 🍖.
 
+### 🎙️ ¡Órdenes por VOZ!
+Pulsa el botón **🎤 Voz** (en las ÓRDENES del HUD) y **háblales de verdad**:
+- **"¡Quietos!"** → se acaban las peleas al instante y todos se quedan quietecitos.
+- **"¡Escondeos!"** / **"¡a esconderse!"** / **"¡refugio!"** → corren a esconderse.
+- **"¡Ven!"** / **"¡Aquí!"** → vienen corriendo hacia la dueña.
+- **"¡Sentado!"** → se sientan todos.
+- **Su nombre** ("¡Max!", "¡Misi!") → **te contestan** con su voz y vienen; si lo dices con una orden, solo esa mascota obedece (y gana +2🪙).
+- **"¡Hospital!"** / **"¡ambulancia!"** → el más herido viaja en ambulancia (si el hospital está abierto).
+- **"¡Pelota!"** → prepara el lanzamiento.
+Entiende aunque la escucha no sea perfecta ("Maz" = "Max" 😉). Funciona en Chrome/Edge/Samsung Internet y Safari modernos, pidiendo permiso de micrófono una vez.
+
+### 📱 Pensado para el móvil
+- **Pantalla completa ⛶** (botón arriba): el juego llena TODA la pantalla y, en Android, se pone **horizontal** solo.
+- **En horizontal** todo se reorganiza: mundo a un lado, panel de cuidado al otro, cabecera y mundos compactos — nada se sale de la pantalla.
+- En vertical te recuerda amablemente girar el móvil 🔄.
+- **Alertas pequeñitas** abajo a la derecha: nunca tapan el título ni el juego.
+
 ### 🔊 Voces propias
 Cada animal tiene su **voz sintetizada** (WebAudio, sin archivos): el perro ladra, el gato maúlla, el ratón hace *pi-pi*… y cambia según su ánimo: contento, hambriento, dormido, enfadado (¡GRRR!) o asustado.
 
@@ -50,14 +67,19 @@ Cada animal tiene su **voz sintetizada** (WebAudio, sin archivos): el perro ladr
 - **URL de Pages**: <https://eddyflores100-lang.github.io/emma-care-studio/>
 
 ### Dominio propio (emmacare.alicelabs.site)
-El archivo `public/CNAME` ya contiene el dominio, y Pages lo aplicará al publicar.
-Solo falta un registro DNS en el gestor de `alicelabs.site`:
+El DNS **ya apunta bien** (`emmacare` → `eddyflores100-lang.github.io` ✓ comprobado).
+El juego funciona 100% en la URL de Pages de arriba; para activar el dominio bonito solo falta
+el permiso en GitHub (la API no lo permite en deploys con Actions):
 
-| Tipo | Nombre | Valor |
-|------|--------|-------|
-| CNAME | `emmacare` | `eddyflores100-lang.github.io` |
+1. Entra en **Settings → Pages** del repositorio.
+2. En **Custom domain** escribe `emmacare.alicelabs.site` y pulsa **Save**.
+3. Espera 5–30 min a que GitHub emita el certificado HTTPS y marca **Enforce HTTPS**.
 
-Cuando el DNS apunte, entra en **Settings → Pages** y activa *Enforce HTTPS*. ¡Listo!
+El build ya está preparado para **los dos sitios a la vez** (raíz y subruta), así que
+no hay que tocar nada más: cuando el dominio se active, funcionará al primer momento.
+
+> Si GitHub ya muestra el dominio en Settings → Pages pero el navegador dice "tu conexión no es privada",
+> es solo el certificado emitiéndose: espera unos minutos y recarga.
 
 ---
 
@@ -74,8 +96,10 @@ bun run build:export   # build estático para Pages (carpeta out/)
 
 ## 🗺️ Hoja de ruta
 - **v0.5** — ✅ Autoguardado automático + publicación en GitHub Pages
-- **v0.6** — Exportar el mundo a Roblox Studio (JSON → Lua)
-- **v0.7** — Biblioteca de sonidos y sprites propios
+- **v0.6** — ✅ Heridas tras peleas, hospital zona segura con reposo y curación, ambulancia 🚑
+- **v0.7** — ✅ Órdenes por voz 🎙️, pantalla completa ⛶, modo horizontal para móvil y alertas compactas
+- **v0.8** — Exportar el mundo a Roblox Studio (JSON → Lua)
+- **v0.9** — Biblioteca de sonidos y sprites propios
 - **v1.0** — Asistente IA que construye el mundo contándole un cuento
 
 ---

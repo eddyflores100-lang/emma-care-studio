@@ -94,15 +94,15 @@ export default function Home() {
 
       {mode === 'edit' ? (
         <>
-          {/* ===== Móvil / tablet: lienzo + pestañas ===== */}
-          <div className="flex min-h-0 flex-1 flex-col lg:hidden">
-            <div className="h-[42vh] min-h-[250px] shrink-0 px-3 pt-3">
+          {/* ===== Móvil / tablet: lienzo + pestañas (en horizontal, lado a lado) ===== */}
+          <div className="emma-mob-edit flex min-h-0 flex-1 flex-col lg:hidden">
+            <div className="emma-mob-canvas h-[42vh] min-h-[250px] shrink-0 px-3 pt-3">
               <WorldCanvas />
             </div>
             <Tabs
               value={mobileTab}
               onValueChange={(v) => setMobileTab(v as typeof mobileTab)}
-              className="flex min-h-0 flex-1 flex-col pt-3"
+              className="emma-mob-side flex min-h-0 flex-1 flex-col pt-3"
             >
               <TabsList className="mx-3 grid h-11 w-auto shrink-0 grid-cols-3 rounded-full bg-rose-100 p-1">
                 <TabsTrigger value="objetos" className="rounded-full text-xs font-black">
@@ -140,11 +140,15 @@ export default function Home() {
           </div>
         </>
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 p-3 sm:gap-3 sm:p-3">
-          <div className="min-h-0 flex-1">
+        <div className="emma-play flex min-h-0 flex-1 flex-col gap-2 p-3 sm:gap-3 sm:p-3">
+          <div className="emma-canvas-play min-h-0 flex-1">
             <WorldCanvas />
           </div>
           <PlayHUD />
+          {/* en móvil vertical: mejor de lado (el HUD y el mundo se estiran) */}
+          <div className="emma-rotate pointer-events-none fixed left-1/2 top-12 z-40 hidden max-[1024px]:portrait:block">
+            🔄 Gira el móvil: ¡se juega mejor en horizontal!
+          </div>
         </div>
       )}
     </main>

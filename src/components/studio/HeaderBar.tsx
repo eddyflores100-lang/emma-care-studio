@@ -1,8 +1,10 @@
 'use client'
 
 // Barra superior: logo, guardar/exportar/nuevo (editor) y monedas + tienda
-// (modo juego). También el botón grande ▶️ ¡JUGAR!
+// (modo juego). También el botón grande ▶️ ¡JUGAR!, el micrófono de
+// pantalla completa ⛶ y el silenciador.
 
+import { useSyncExternalStore } from 'react'
 import { useStudio } from '@/lib/studio/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -25,6 +27,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { ShopItemId } from '@/lib/studio/types'
+import { cn } from '@/lib/utils'
 
 function ShopDialog() {
   const coins = useStudio((s) => s.coins)
@@ -106,10 +109,51 @@ export function HeaderBar() {
   const newProject = useStudio((s) => s.newProject)
   const toggleMute = useStudio((s) => s.toggleMute)
 
+  // ===== PANTALLA COMPLETA =====
+  // el juego ocupa todo el monitor o toda la pantalla del móvil y, en
+  // Android, se intenta fijar la orientación horizontal (en iPhone no hay
+  // fullscreen en la web: ahí el botón no aparece y el juego sigue normal)
+  const subscribeFs = (cb: () => void) => {
+    document.addEventListener('fullscreenchange', cb)
+    return () => document.removeEventListener('fullscreenchange', cb)
+  }
+  const fsOn = useSyncExternalStore(
+    subscribeFs,
+    () => !!document.fullscreenElement,
+    () => false,
+  )
+  const fsOk = useSyncExternalStore(
+    subscribeFs,
+    () => !!document.fullscreenEnabled,
+    () => false,
+  )
+
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+        try {
+          await screen.orientation?.lock?.('landscape')
+        } catch {
+          /* iOS/Safari sin lock: da igual, el juego funciona igual */
+        }
+      } else {
+        try {
+          screen.orientation?.unlock?.()
+        } catch {
+          /* nada */
+        }
+        await document.exitFullscreen()
+      }
+    } catch {
+      /* usuario canceló o navegador no lo permite */
+    }
+  }
+
   return (
-    <header className="flex shrink-0 items-center justify-between gap-1.5 border-b-2 border-rose-100 bg-white/85 px-2.5 py-2.5 backdrop-blur sm:gap-2 sm:px-4">
+    <header className="emma-top flex shrink-0 items-center justify-between gap-1.5 border-b-2 border-rose-100 bg-white/85 px-2.5 py-2.5 backdrop-blur sm:gap-2 sm:px-4">
       <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-        <span className="text-2xl" aria-hidden>
+        <span className="emma-logo text-2xl" aria-hidden>
           🎮
         </span>
         <h1 className="truncate text-sm font-black tracking-tight sm:text-lg">
@@ -219,6 +263,25 @@ export function HeaderBar() {
         >
           {muted ? '🔇' : '🔊'}
         </Button>
+
+        {fsOk && (
+          <Button
+            variant={fsOn ? 'default' : 'ghost'}
+            onClick={toggleFullscreen}
+            className={cn(
+              'rounded-full text-lg',
+              fsOn && 'bg-rose-500 font-black text-white hover:bg-rose-600',
+            )}
+            title={
+              fsOn
+                ? 'Salir de pantalla completa'
+                : 'Pantalla completa: ¡el juego llena toda la pantalla! (en el móvil se pone horizontal)'
+            }
+            aria-label="Pantalla completa"
+          >
+            {fsOn ? '🗗' : '⛶'}
+          </Button>
+        )}
       </div>
     </header>
   )

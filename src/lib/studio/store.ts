@@ -35,6 +35,7 @@ import {
   uid,
 } from './catalog'
 import { petVoice, setMuted, sfx } from './sound'
+import { parseVoiceCommand, type VoiceOutcome } from './voice'
 
 const SAVE_KEY = 'emma-care-studio-v1'
 
@@ -326,6 +327,8 @@ interface StudioState {
   sendToHospital: (id: string) => void
   /** el dueño toca la pantalla: ¡se acaban las persecuciones! Devuelve true si calmió algo */
   calmAll: (x: number, y: number) => boolean
+  /** órdenes por VOZ: ¡Quietos! ¡Escondeos! ¡Ven! ¡Sentado! o llamarlas por nombre */
+  voiceCommand: (raw: string) => VoiceOutcome
   /** activar/desactivar el modo lanzar pelota */
   toggleBallMode: () => void
   /** lanzar la pelota a un punto del mundo */
@@ -1143,14 +1146,15 @@ export const useStudio = create<StudioState>((set, get) => {
       const s = get()
       if (s.mode !== 'play') return false
       const now = Date.now()
-      const chasing = Object.values(s.pets).filter((rt) => rt.chaseUntil > now)
+      // OJO: PetRuntime no tiene campo id — la clave del mapa ES el id
+      const chasing = Object.entries(s.pets).filter(([, rt]) => rt.chaseUntil > now)
       if (!chasing.length) return false
       const pets = { ...s.pets }
-      for (const rt of chasing) {
+      for (const [petId, rt] of chasing) {
         // cooldown para que el par no vuelva a pelear enseguida
         if (rt.chasePartner) {
-          const predId = rt.chaseRole === 'chase' ? rt.id : rt.chasePartner
-          const preyId = rt.chaseRole === 'chase' ? rt.chasePartner : rt.id
+          const predId = rt.chaseRole === 'chase' ? petId : rt.chasePartner
+          const preyId = rt.chaseRole === 'chase' ? rt.chasePartner : petId
           const prt = pets[predId]
           if (prt)
             pets[predId] = {
@@ -1159,8 +1163,8 @@ export const useStudio = create<StudioState>((set, get) => {
             }
         }
         // chaseUntil = ahora → el motor la termina con su lógica normal (premios incluidos)
-        const cur = pets[rt.id]
-        if (cur) pets[rt.id] = { ...cur, chaseUntil: now }
+        const cur = pets[petId]
+        if (cur) pets[petId] = { ...cur, chaseUntil: now }
       }
       set({ pets, shakeUntil: 0 })
       get().spawnParticles('👏', x, y, 2)
@@ -1168,6 +1172,203 @@ export const useStudio = create<StudioState>((set, get) => {
       sfx.happy()
       toast('👏 ¡Aplaudiste fuerte! Todos se calmaron 💙', { duration: 2600 })
       return true
+    },
+
+    /**
+     * ÓRDENES POR VOZ: la niña habla y las mascotas obedecen.
+     *  · "¡Quietos!"        → se acaban las peleas y todos se quedan quietos
+     *  · "¡Escondeos!"      → corren a buscar refugio
+     *  · "¡Ven!" / "¡Aquí!" → van hacia la dueña
+     *  · "¡Sentado!"        → se sientan
+     *  · "¡Max!" (nombre)   → contesta y viene
+     *  · "hospital"         → la más herida viaja en ambulancia (si está abierto)
+     *  · "pelota"           → prepara el lanzamiento
+     * Si nombró a una mascota, solo esa obedece (y gana premio); si no, todas.
+     */
+    voiceCommand: (raw) => {
+      const s = get()
+      const now = Date.now()
+      if (s.mode !== 'play') {
+        toast('▶️ Primero pulsa ¡JUGAR! y luego háblales: ¡Quietos! ¡Escondeos! ¡Ven! 🎙️', {
+          id: 'voice-noplay',
+          duration: 2800,
+        })
+        return 'noplay'
+      }
+      const allPets = s.objects.filter((o) => isPetObj(o) && o.level === s.currentLevel)
+      const parsed = parseVoiceCommand(raw, allPets)
+      if (!parsed) {
+        if (now - (s.actionCd['voice:unknown'] ?? 0) > 3200) {
+          set({ actionCd: { ...s.actionCd, 'voice:unknown': now } })
+          toast(
+            '🤔 No entendí. Di: ¡Quietos! · ¡Escondeos! · ¡Ven! · ¡Sentado! · su nombre · pelota',
+            { id: 'voice-unknown', duration: 3200 },
+          )
+        }
+        return 'unknown'
+      }
+      const { kind, named, matchedName } = parsed
+
+      // anti-repetición (la escucha provisional dispara varias veces igual):
+      // cada orden y mascota tiene sus segundos mínimos entre disparos
+      const gap =
+        kind === 'hospital' ? 5000 : kind === 'ball' ? 4500 : kind === 'hide' ? 4000 : 3000
+      const cdKey = `voice:${kind}:${matchedName ?? 'todos'}`
+      if (now - (s.actionCd[cdKey] ?? 0) < gap) return 'ok'
+      const actionCd = { ...s.actionCd, [cdKey]: now, 'voice:unknown': now }
+      const label = matchedName ?? 'todos'
+      const pets = { ...s.pets }
+      const spawn = get().spawnParticles
+      // las que reposan (hospital/cama) no se levantan: ¡están curándose!
+      const disponibles = (named.length ? named : allPets).filter((p) => {
+        const rt = s.pets[p.id]
+        return rt && rt.state !== 'rest'
+      })
+
+      // ===== ¡QUIETOS! — se acaban TODAS las peleas y todos se congelan =====
+      if (kind === 'calm') {
+        // OJO: PetRuntime no tiene campo id — la clave del mapa ES el id
+        const chasing = Object.entries(pets).filter(([, rt]) => rt.chaseUntil > now)
+        for (const [petId, rt] of chasing) {
+          if (rt.chasePartner) {
+            const predId = rt.chaseRole === 'chase' ? petId : rt.chasePartner
+            const preyId = rt.chaseRole === 'chase' ? rt.chasePartner : petId
+            const prt = pets[predId]
+            if (prt)
+              pets[predId] = {
+                ...prt,
+                pairCd: { ...prt.pairCd, [`rival:${predId}:${preyId}`]: now },
+              }
+          }
+          pets[petId] = { ...rt, chaseUntil: now }
+        }
+        for (const p of allPets) {
+          const rt = pets[p.id]
+          if (!rt) continue
+          pets[p.id] = {
+            ...rt,
+            obey: { cmd: 'stay', until: now + 5000 },
+            state: 'idle',
+            wanderAt: now + 8000,
+          }
+          spawn('✋', p.x, p.y - 4, 1)
+        }
+        set({ pets, shakeUntil: 0, actionCd })
+        sfx.happy()
+        toast(`🎙️ ¡Quietos, ${label}! Se acabó la pelea, todos quietecitos 💙`, { duration: 2600 })
+        return 'ok'
+      }
+
+      // ===== PELOTA =====
+      if (kind === 'ball') {
+        set({ actionCd })
+        get().toggleBallMode()
+        return 'ok'
+      }
+
+      // ===== HOSPITAL (por voz: "Max al hospital", "traen la ambulancia") =====
+      if (kind === 'hospital') {
+        set({ actionCd })
+        const heridos = allPets.filter((p) => {
+          const rt = s.pets[p.id]
+          return rt && (rt.injured || rt.sick)
+        })
+        const elegido = named[0] ?? heridos.sort((a, b) => {
+          const ra = s.pets[a.id]
+          const rb = s.pets[b.id]
+          return (rb?.injured ? 1 : 0) - (ra?.injured ? 1 : 0)
+        })[0]
+        if (!elegido) {
+          toast('😊 Nadie necesita el hospital ahora mismo', { duration: 2600 })
+          return 'ok'
+        }
+        get().sendToHospital(elegido.id)
+        return 'ok'
+      }
+
+      // ===== ÓRDENES DE MOVIMIENTO A UN GRUPO (escondeos / ven / sentado) =====
+      let coins = s.coins
+      let alguna = false
+      for (const p of disponibles) {
+        const rt0 = pets[p.id]
+        if (!rt0) continue
+        alguna = true
+        const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
+        // la obediencia salva: si la están persiguiendo, se acaba la persecución
+        if (rt.chaseUntil > now && rt.chasePartner) {
+          const partner = s.objects.find((o) => o.id === rt.chasePartner)
+          const prt = partner ? pets[partner.id] : null
+          rt.chaseUntil = 0
+          rt.chaseRole = null
+          rt.chasePartner = null
+          rt.hiding = null
+          rt.onTopOf = null
+          if (partner && prt) {
+            pets[partner.id] = {
+              ...prt,
+              chaseUntil: 0,
+              chaseRole: null,
+              chasePartner: null,
+              hiding: null,
+              onTopOf: null,
+              pairCd: { ...prt.pairCd, [`rival:${partner.id}:${p.id}`]: now },
+            }
+            speak(set, get, partner, 'triste')
+          }
+        }
+        if (kind === 'hide') {
+          rt.obey = { cmd: 'hide', until: now + 7000 }
+          rt.hideSpot = null
+          rt.wanderAt = now + 9000
+        } else if (kind === 'come') {
+          rt.obey = { cmd: 'come', until: now + 8000 }
+          rt.wanderAt = now + 11000
+        } else if (kind === 'sit') {
+          rt.obey = { cmd: 'sit', until: now + 6000 }
+          rt.wanderAt = now + 8000
+        } else if (kind === 'call') {
+          rt.obey = { cmd: 'come', until: now + 8000 }
+          rt.wanderAt = now + 11000
+        }
+        rt.state = 'idle'
+        spawn(
+          kind === 'hide' ? '🙈' : kind === 'sit' ? '🪑' : '👉',
+          p.x,
+          p.y - 4,
+          1,
+        )
+        // premio por buen comportamiento SOLO si la nombraron (evita fábrica de monedas)
+        if (matchedName && !rt.sick) {
+          coins += 2
+          const lv = gainXp(rt, 6)
+          if (lv) {
+            coins += 10
+            celebrateLevel(set, get, p, lv)
+          }
+        }
+        // ¡contestan! su voz + un globito de respuesta
+        speak(set, get, p, kind === 'hide' ? 'normal' : 'feliz')
+        if (kind === 'call' || kind === 'come') {
+          set({ say: { ...get().say, [p.id]: { text: '¡Aquí voy! 🐾', until: now + 2400 } } })
+        }
+        pets[p.id] = rt
+      }
+      if (!alguna) {
+        toast('😴 Todas están reposando… las escucharán al despertar', { duration: 2800 })
+        set({ actionCd })
+        return 'ok'
+      }
+      set({ pets, coins, actionCd })
+      sfx.treat()
+      vib(40)
+      const msg =
+        kind === 'hide'
+          ? `🎙️ ¡Escondeos, ${label}! Corriendo a buscar refugio`
+          : kind === 'sit'
+            ? `🎙️ ¡Sentado, ${label}! Qué bien obedecen`
+            : `🎙️ ¡Ven, ${label}! Van corriendo hacia ti 🐾`
+      toast(msg, { duration: 2800 })
+      return 'ok'
     },
 
     moveTick: (dtMs) => {

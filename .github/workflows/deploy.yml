@@ -34,11 +34,23 @@ jobs:
         run: bun run build:export
         env:
           EXPORT_MODE: "1"
-          # mientras el sitio se abra desde el preview github.io/emma-care-studio
-          # hace falta basePath. Cuando actives el dominio emmacare.alicelabs.site
-          # (Settings → Pages → Custom domain) puedes borrar la línea de abajo
-          # y el juego se servirá desde la raíz.
+          # basePath para github.io/emma-care-studio (el paso de abajo duplica el
+          # export también a la raíz, así el dominio emmacare.alicelabs.site
+          # funciona sin tocar nada aquí)
           PAGES_BASE_PATH: "/emma-care-studio"
+
+      # El export usa basePath /emma-care-studio. Copiándolo TAMBIÉN dentro de
+      # out/emma-care-studio/ el mismo artefacto sirve bien en los dos sitios:
+      #  · https://emmacare.alicelabs.site/            (raíz → usa la copia interna)
+      #  · https://eddyflores100-lang.github.io/emma-care-studio/  (subruta)
+      # Así nunca hay que andar borrando/poniendo el basePath a mano.
+      - name: Duplicar export para servir en raíz y en subruta
+        run: |
+          mkdir -p /tmp/export-dup
+          cp -r out/. /tmp/export-dup/
+          mkdir -p out/emma-care-studio
+          cp -r /tmp/export-dup/. out/emma-care-studio/
+          echo "Artefacto listo: raíz + /emma-care-studio"
 
       - name: Subir artefacto
         uses: actions/upload-pages-artifact@v3

@@ -7,6 +7,7 @@
 import { useStudio } from '@/lib/studio/store'
 import { STATS, STAT_KEYS, catalogById } from '@/lib/studio/catalog'
 import { Command, PlayerAction } from '@/lib/studio/types'
+import { VoiceControls } from '@/components/studio/VoiceControls'
 import { cn } from '@/lib/utils'
 
 const ACTIONS: { id: PlayerAction; emoji: string; label: string }[] = [
@@ -51,7 +52,7 @@ export function PlayHUD() {
 
   return (
     <section
-      className="safe-b shrink-0 rounded-3xl border-2 border-rose-100 bg-white p-2.5 shadow-md sm:p-3"
+      className="emma-hud safe-b shrink-0 rounded-3xl border-2 border-rose-100 bg-white p-2.5 shadow-md sm:p-3"
       aria-label="Cuidado de mascotas"
     >
       {/* selector de mascotas */}
@@ -92,7 +93,7 @@ export function PlayHUD() {
 
       {!sel || !rt ? (
         <p className="py-2 text-center text-sm font-bold text-slate-400">
-          👆 Toca una mascota en el mundo (o arriba) para ver sus datos y cuidarla
+          👆 Toca una mascota para cuidarla · 🎙️ ¡o háblale por la voz!
         </p>
       ) : (
         <>
@@ -152,13 +153,13 @@ export function PlayHUD() {
                   onClick={() => playerAction(a.id)}
                   disabled={disabled}
                   className={cn(
-                    'flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 font-black transition-all active:scale-95 sm:h-16',
+                    'hud-btn flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 font-black transition-all active:scale-95 sm:h-16',
                     disabled
                       ? 'border-slate-100 bg-slate-50 opacity-40'
                       : 'border-amber-200 bg-white hover:bg-amber-50',
                   )}
                 >
-                  <span className="text-2xl">{emoji}</span>
+                  <span className="hud-emoji text-2xl">{emoji}</span>
                   <span className="text-[10px] text-slate-500">{label}</span>
                 </button>
               )
@@ -168,76 +169,77 @@ export function PlayHUD() {
                 onClick={() => playerAction('curar')}
                 disabled={cooling('curar')}
                 className={cn(
-                  'flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 font-black transition-all active:scale-95 sm:h-16',
+                  'hud-btn flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 font-black transition-all active:scale-95 sm:h-16',
                   cooling('curar')
                     ? 'border-slate-100 bg-slate-50 opacity-40'
                     : 'border-teal-300 bg-teal-50 hover:bg-teal-100',
                 )}
               >
-                <span className="text-2xl">🏥</span>
+                <span className="hud-emoji text-2xl">🏥</span>
                 <span className="text-[10px] text-teal-700">Curar</span>
               </button>
             )}
             {rt.injured && currentLevel !== 'hospital' && (
               <button
                 onClick={() => sendToHospital(sel.id)}
-                className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-sky-300 bg-sky-50 font-black transition-all hover:bg-sky-100 active:scale-95 sm:h-16"
+                className="hud-btn flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-sky-300 bg-sky-50 font-black transition-all hover:bg-sky-100 active:scale-95 sm:h-16"
               >
-                <span className="text-2xl">🚑</span>
+                <span className="hud-emoji text-2xl">🚑</span>
                 <span className="text-[10px] text-sky-700">Hospital</span>
               </button>
             )}
           </div>
 
-          {/* órdenes de adiestramiento + pelota */}
-          <div className="mb-2 flex items-center gap-1.5">
-            <span className="shrink-0 text-[10px] font-black tracking-wide text-slate-400">
-              ÓRDENES:
-            </span>
-            <div className="grid flex-1 grid-cols-5 gap-1.5">
-              {(
-                [
-                  { id: 'sit', emoji: '🪑', label: '¡Sentado!' },
-                  { id: 'stay', emoji: '✋', label: '¡Quieto!' },
-                  { id: 'come', emoji: '👉', label: '¡Ven!' },
-                  { id: 'hide', emoji: '🙈', label: '¡Escondeos!' },
-                ] as { id: Command; emoji: string; label: string }[]
-              ).map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => giveCommand(c.id)}
-                  disabled={cooling('cmd')}
-                  className={cn(
-                    'flex h-11 flex-col items-center justify-center gap-0 rounded-2xl border-2 text-[10px] font-black transition-all active:scale-95',
-                    cooling('cmd')
-                      ? 'border-slate-100 bg-slate-50 opacity-40'
-                      : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100',
-                  )}
-                >
-                  <span className="text-lg leading-none">{c.emoji}</span>
-                  {c.label}
-                </button>
-              ))}
-              <button
-                onClick={toggleBallMode}
-                className={cn(
-                  'flex h-11 flex-col items-center justify-center gap-0 rounded-2xl border-2 text-[10px] font-black transition-all active:scale-95',
-                  ballPending
-                    ? 'border-rose-500 bg-rose-500 text-white'
-                    : 'border-lime-300 bg-lime-50 text-lime-700 hover:bg-lime-100',
-                )}
-              >
-                <span className="text-lg leading-none">🎾</span>
-                {ballPending ? '¡Lanza!' : 'Pelota'}
-              </button>
-            </div>
-          </div>
-
-          <p className="mt-2 hidden text-center text-[11px] font-bold text-slate-400 sm:block">
+          <p className="hud-hint mt-2 hidden text-center text-[11px] font-bold text-slate-400 sm:block">
             🪙 Gana monedas cuidando a {sel.name} · si sale herido/a de una correteada llévalo en 🚑 al hospital · en el hospital nadie pelea: todos en reposo · gástalas en la 🛍 Tienda
           </p>
         </>
       )}
+
+      {/* órdenes de adiestramiento + pelota + VOZ: siempre visibles en juego */}
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className="shrink-0 text-[10px] font-black tracking-wide text-slate-400">
+          ÓRDENES:
+        </span>
+        <div className="grid flex-1 grid-cols-6 gap-1.5">
+          {(
+            [
+              { id: 'sit', emoji: '🪑', label: '¡Sentado!' },
+              { id: 'stay', emoji: '✋', label: '¡Quieto!' },
+              { id: 'come', emoji: '👉', label: '¡Ven!' },
+              { id: 'hide', emoji: '🙈', label: '¡Escondeos!' },
+            ] as { id: Command; emoji: string; label: string }[]
+          ).map((c) => (
+            <button
+              key={c.id}
+              onClick={() => giveCommand(c.id)}
+              disabled={cooling('cmd')}
+              className={cn(
+                'hud-btn flex h-11 flex-col items-center justify-center gap-0 rounded-2xl border-2 text-[10px] font-black transition-all active:scale-95',
+                cooling('cmd')
+                  ? 'border-slate-100 bg-slate-50 opacity-40'
+                  : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100',
+              )}
+            >
+              <span className="text-lg leading-none">{c.emoji}</span>
+              {c.label}
+            </button>
+          ))}
+          <button
+            onClick={toggleBallMode}
+            className={cn(
+              'hud-btn flex h-11 flex-col items-center justify-center gap-0 rounded-2xl border-2 text-[10px] font-black transition-all active:scale-95',
+              ballPending
+                ? 'border-rose-500 bg-rose-500 text-white'
+                : 'border-lime-300 bg-lime-50 text-lime-700 hover:bg-lime-100',
+            )}
+          >
+            <span className="hud-emoji text-lg leading-none">🎾</span>
+            {ballPending ? '¡Lanza!' : 'Pelota'}
+          </button>
+          <VoiceControls />
+        </div>
+      </div>
     </section>
   )
 }

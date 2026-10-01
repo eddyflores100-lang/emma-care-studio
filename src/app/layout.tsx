@@ -34,6 +34,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: "cover",
+  themeColor: "#FFF7ED",
 };
 
 export default function RootLayout({
@@ -47,7 +49,15 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >
         {children}
-        <Toaster position="top-center" richColors visibleToasts={3} />
+        {/* alertas pequeñas abajo a la derecha: no tapan el título ni el HUD */}
+        <Toaster
+          position="bottom-right"
+          richColors
+          visibleToasts={2}
+          gap={6}
+          offset={12}
+          toastOptions={{ className: "emma-toast", duration: 3400 }}
+        />
       </body>
     </html>
   );

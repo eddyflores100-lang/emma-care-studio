@@ -15,7 +15,7 @@ export function LevelBar() {
 
   return (
     <nav
-      className="thin-scroll flex shrink-0 items-center gap-1.5 overflow-x-auto px-2.5 py-1.5 sm:px-4"
+      className="emma-levels thin-scroll flex shrink-0 items-center gap-1.5 overflow-x-auto px-2.5 py-1.5 sm:px-4"
       aria-label="Mundos del juego"
     >
       <span className="hidden shrink-0 text-[11px] font-black tracking-wide text-slate-400 sm:inline">

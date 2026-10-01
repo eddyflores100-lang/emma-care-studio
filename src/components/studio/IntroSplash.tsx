@@ -70,6 +70,7 @@ export function IntroSplash() {
           <p>🔊 Cada animal hace SU sonido: ladra, maúlla, ruge… ¡15 mascotas!</p>
           <p>😈 ¡Rivalidades! El perro persigue al gato: la pantalla tiembla 📳</p>
           <p>🌿 Escondites y trepaderas para escapar · 🎾 pelota · 🪑 órdenes</p>
+          <p>🎙️ ¡Háblales por la voz! "¡Quietos!" · "¡Escondeos!" · "¡Max, ven!"</p>
           <p>🌧️ Sorpresas: lluvia, mariposas y cajas regalo · 👆 acaricia con el dedo</p>
         </div>
 
