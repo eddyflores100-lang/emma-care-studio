@@ -34,6 +34,11 @@ jobs:
         run: bun run build:export
         env:
           EXPORT_MODE: "1"
+          # mientras el sitio se abra desde el preview github.io/emma-care-studio
+          # hace falta basePath. Cuando actives el dominio emmacare.alicelabs.site
+          # (Settings → Pages → Custom domain) puedes borrar la línea de abajo
+          # y el juego se servirá desde la raíz.
+          PAGES_BASE_PATH: "/emma-care-studio"
 
       - name: Subir artefacto
         uses: actions/upload-pages-artifact@v3
