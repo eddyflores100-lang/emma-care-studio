@@ -147,3 +147,28 @@ Work Log:
 Stage Summary:
 - Emma Care Studio v0.6: ciclo completo correteada/pelea → heridos → reposo en casa (lento) o 🚑 hospital desbloqueable (rápido, zona segura donde nadie pelea, todos en reposo) → curados vuelven solitos a casa
 - Deploy en vivo: https://eddyflores100-lang.github.io/emma-care-studio/ (v0.6)
+
+---
+Task ID: 8
+Agent: Super Z (main)
+Task: v0.7 — Voz 🎙️, pantalla completa ⛶, horizontal móvil, alertas pequeñas + arreglar sitio que no carga (dominio)
+
+Work Log:
+- DIAGNÓSTICO dominio: DNS perfecto (emmacare → eddyflores100-lang.github.io → 185.199.x ✓) pero GitHub Pages sin registrar el dominio (GET /pages → cname:null; HTTP 80 → 404; TLS servía *.github.io). PATCH cname por API → 404 de nuevo (limitación build_type=workflow). Token del usuario aún válido ✓ (lo usa este push)
+- FIX deploy: workflow duplica el export a out/emma-care-studio/ → el MISMO artefacto sirve bien en raíz (dominio) y subruta (github.io) para siempre; verificado con build local basePath + http.server: raíz 200, chunk 200, subruta 200, CNAME 200
+- VOZ voice.ts (nuevo): norm() sin acentos, distancia de Lev. para perdonar escucha (maz↔max), vocabulario (quietos/escondeos/ven/sentado/hospital/pelota) + parseVoiceCommand (nombre → solo esa mascota; sin nombre → todas), useVoice() con SpeechRecognition continuo (interim+final, rearranque en onend, fallback es-ES, manejo permiso)
+- store.voiceCommand: quietos → termina TODAS las peleas (chaseUntil=now + pairCd) + congela a todos (obey stay 5s) + shakeUntil 0; escondeos/ven/sentado/call → obeven (ven camina al punto de la dueña 50,84), contestan con su voz + globito "¡Aquí voy! 🐾"; call/come nominado → +2🪙 +6XP (sin nombre: sin monedas, anti-fábrica); hospital → sendToHospital (gate desbloqueo intacto); pelota → toggleBallMode; las que reposan (rest) no se levantan; anti-repetición por orden+mascota (interim dedup) y anti-desconocido 3.2s
+- BUG REAL corregido: PetRuntime NO tiene campo id — calmAll de v0.5 y mi rama calm usaban rt.id (undefined) → pets['undefined'] y las peleas no se cortaban. Fix en ambos: Object.entries con la clave como id. (En pruebas viejas el chase simplemente expiró por tiempo y lo enmascaró)
+- UI: VoiceControls (nuevo) — botón 🎤 que siempre se ve en juego (movido FUERA del bloque de mascota seleccionada) + pastilla fija abajo-izquierda con lo que oye (.emma-voice-cap); animación emma-mic-live; ÓRDENES grid 5→6
+- HeaderBar: botón ⛶ pantalla completa (requestFullscreen + screen.orientation.lock('landscape') con catch; useSyncExternalStore para fullscreenchange, sin setState en effects); header con clase emma-top/emma-logo
+- page.tsx: clases emma-mob-edit/emma-mob-canvas/emma-mob-side (editor) y emma-play/emma-canvas-play (juego) + aviso 🔄 fijo con fade 5s solo en móvil vertical (max-[1024px]:portrait)
+- globals.css: :fullscreen full-bleed; toasts compactos [data-sonner-toast].emma-toast; media query landscape (max-h:560px max-w:1024px): header 3px, editor row 52/48, juego row con HUD columna 42% scroll, botones 42px, niveles compactos, toasts aún más pequeños
+- layout.tsx: Toaster position bottom-right, visibleToasts 2, offset 12, className emma-toast, duration 3400; viewport viewportFit cover + themeColor
+- IntroSplash: línea nueva "🎙️ ¡Háblales por la voz!"; package.json 0.7.0; README (voz, móvil, dominio con pasos exactos y nota de certificado); roadmap v0.6/v0.7 ✅
+- Pruebas agent-browser: quietos en pelea simulada → chaseLeft -1 ambos + obey stay + sin shake ✓; "¡Misi ven aquí ahora!" → llegó a la dueña (dist 1) ✓; herida en rest NO se levanta ✓; desconocido → toast "No entendí" con throttle ✓; nombres: "¡Max ven aqui!" matchedName Max ✓; fullscreen true con clic confiable (el sintético sin gesto lo rechaza, en el móvil real hay gesto) ✓; landscape 844x390: juego row mundo 480 + HUD 340, header 44px, niveles 30px ✓; landscape editor row 431/389 ✓; portrait 390x844: aviso girar visible ✓; desktop 1280 intacto ✓; cero errores JS; lint limpio; build export OK
+- Capturas: emma7-landscape-play.png, emma7-landscape-edit.png, emma7-portrait.png, emma7-desktop.png
+
+Stage Summary:
+- Emma Care Studio v0.7.0: se juega HABLÁNDOLE (quietos corta peleas al instante, nombres con respuesta), a pantalla completa y en horizontal de móvil, con alertas que no estorban
+- Deploy push 5911560 → Actions; sitio vivo en github.io/emma-care-studio y preparado para raíz cuando el dominio se registre
+- DOMINIO (única pieza manual restante): Settings → Pages → Custom domain emmacare.alicelabs.site → Save → Enforce HTTPS cuando emita certificado (5-30 min). DNS del usuario ya correcto
