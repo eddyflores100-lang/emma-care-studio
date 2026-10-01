@@ -191,6 +191,69 @@ function purr() {
   for (let i = 0; i < 8; i++) tone(95 + (i % 2) * 25, i * 0.07, 0.05, 'sawtooth', 0.04)
 }
 
+/** siseo de gato enfadado */
+function hiss(start = 0, dur = 0.4) {
+  noise(start, dur, 0.07, 2600)
+  noise(start + 0.05, dur * 0.8, 0.05, 3400)
+}
+
+/** cacareo de gallina: "¡coc!" seco */
+function cluck(start = 0, pitch = 1) {
+  slide(420 * pitch, 180 * pitch, start, 0.09, 'square', 0.1)
+  noise(start, 0.06, 0.03, 900)
+}
+
+/** cacareo de pánico largo: ¡COCOOOOO! */
+function squawk(start = 0, dur = 0.5, pitch = 1) {
+  slide(520 * pitch, 620 * pitch, start, 0.1, 'square', 0.11)
+  slide(620 * pitch, 300 * pitch, start + 0.1, dur, 'square', 0.1)
+}
+
+/** graznido de pato: ¡cuac! */
+function quack(start = 0, pitch = 1) {
+  slide(300 * pitch, 170 * pitch, start, 0.16, 'square', 0.12)
+  noise(start, 0.12, 0.045, 700)
+}
+
+/** trino de pajarito (dos notas subidas) */
+function tweet(start = 0, pitch = 1) {
+  slide(1800 * pitch, 2600 * pitch, start, 0.08, 'sine', 0.08)
+  slide(2600 * pitch, 2100 * pitch, start + 0.08, 0.1, 'sine', 0.07)
+}
+
+/** chirrido agudo de ratón/hámster asustado */
+function panicSqueak(start = 0) {
+  for (let i = 0; i < 5; i++) slide(1600 + (i % 2) * 300, 2100, start + i * 0.08, 0.06, 'sine', 0.09)
+}
+
+/** golpecillo de conejo enfadado (pata en el suelo) */
+function thump(start = 0) {
+  slide(140, 70, start, 0.12, 'sine', 0.13)
+}
+
+/** grito de cerdo asustado: ¡chiiii! */
+function squeal(start = 0) {
+  slide(400, 1400, start, 0.28, 'sawtooth', 0.1)
+  slide(1400, 700, start + 0.28, 0.2, 'sawtooth', 0.08)
+}
+
+/** quejido grave de tortuga: ¡plop! */
+function plop(start = 0) {
+  slide(180, 80, start, 0.18, 'sine', 0.13)
+  slide(80, 120, start + 0.18, 0.1, 'sine', 0.06)
+}
+
+/** quejido de animalito grande asustado */
+function moan(start = 0) {
+  slide(240, 140, start, 0.6, 'sine', 0.1)
+}
+
+/** gritito agudo de miedo (yelp) */
+function yelp(start = 0) {
+  slide(900, 1500, start, 0.1, 'sawtooth', 0.1)
+  slide(1500, 600, start + 0.1, 0.18, 'sawtooth', 0.09)
+}
+
 // ===== voz por especie y ánimo =====
 
 export function petVoice(catalogId: string, mood: Mood) {
@@ -209,6 +272,14 @@ export function petVoice(catalogId: string, mood: Mood) {
       } else if (mood === 'triste') {
         slide(420, 240, 0, 0.6, 'sine', 0.09)
         slide(240, 200, 0.62, 0.4, 'sine', 0.07)
+      } else if (mood === 'enojado') {
+        growl(0, 0.45, 95)
+        bark(260, 0.2)
+        bark(240, 0.4)
+        bark(280, 0.6)
+      } else if (mood === 'miedo') {
+        yelp(0)
+        whine(0.3)
       } else {
         bark(320, 0)
         bark(345, 0.16)
@@ -225,6 +296,12 @@ export function petVoice(catalogId: string, mood: Mood) {
         slide(330, 210, 0, 0.6, 'sine', 0.07)
       } else if (mood === 'triste') {
         slide(420, 230, 0, 0.7, 'sine', 0.09)
+      } else if (mood === 'enojado') {
+        hiss(0, 0.5)
+        growl(0.3, 0.4, 140)
+      } else if (mood === 'miedo') {
+        hiss(0, 0.3)
+        meow(0.25, 1.6)
       } else {
         meow(0)
       }
@@ -241,9 +318,159 @@ export function petVoice(catalogId: string, mood: Mood) {
         squeak(750, 0)
       } else if (mood === 'triste') {
         slide(700, 480, 0, 0.35, 'sine', 0.07)
+      } else if (mood === 'enojado') {
+        thump(0)
+        thump(0.2)
+      } else if (mood === 'miedo') {
+        squeak(1800, 0)
+        squeak(1900, 0.09)
+        thump(0.2)
       } else {
         squeak(1400, 0)
         squeak(1400, 0.13)
+      }
+      break
+    case 'mouse':
+      if (mood === 'feliz') {
+        squeak(1700, 0)
+        squeak(1800, 0.08)
+        squeak(1700, 0.16)
+        squeak(1850, 0.24)
+      } else if (mood === 'hambre') {
+        squeak(1300, 0)
+        squeak(1350, 0.12)
+      } else if (mood === 'sueno') {
+        squeak(800, 0)
+      } else if (mood === 'triste') {
+        slide(1100, 600, 0, 0.3, 'sine', 0.07)
+      } else if (mood === 'enojado') {
+        squeak(1500, 0)
+        squeak(1550, 0.08)
+        squeak(1500, 0.16)
+      } else if (mood === 'miedo') {
+        panicSqueak(0)
+      } else {
+        squeak(1600, 0)
+      }
+      break
+    case 'hamster':
+      if (mood === 'feliz') {
+        squeak(1400, 0)
+        squeak(1500, 0.1)
+        squeak(1400, 0.2)
+      } else if (mood === 'hambre') {
+        squeak(1100, 0)
+        squeak(1150, 0.13)
+      } else if (mood === 'sueno') {
+        squeak(700, 0)
+      } else if (mood === 'triste') {
+        slide(900, 500, 0, 0.35, 'sine', 0.07)
+      } else if (mood === 'enojado') {
+        squeak(1250, 0)
+        squeak(1300, 0.1)
+      } else if (mood === 'miedo') {
+        panicSqueak(0.02)
+      } else {
+        squeak(1350, 0)
+        squeak(1350, 0.12)
+      }
+      break
+    case 'bird':
+      if (mood === 'feliz') {
+        tweet(0, 1)
+        tweet(0.18, 1.15)
+        tweet(0.36, 1)
+        tweet(0.54, 1.2)
+      } else if (mood === 'hambre') {
+        tweet(0, 0.85)
+        tweet(0.12, 0.85)
+        tweet(0.24, 0.9)
+      } else if (mood === 'sueno') {
+        slide(1400, 800, 0, 0.4, 'sine', 0.06)
+      } else if (mood === 'triste') {
+        slide(1200, 700, 0, 0.45, 'sine', 0.07)
+      } else if (mood === 'enojado') {
+        slide(2200, 1600, 0, 0.09, 'square', 0.08)
+        slide(2200, 1600, 0.14, 0.09, 'square', 0.08)
+      } else if (mood === 'miedo') {
+        slide(1800, 2800, 0, 0.12, 'square', 0.09)
+        slide(2800, 1200, 0.12, 0.25, 'square', 0.08)
+      } else {
+        tweet(0)
+        tweet(0.16, 1.1)
+      }
+      break
+    case 'chicken':
+      if (mood === 'feliz') {
+        cluck(0, 1.05)
+        cluck(0.14, 1.1)
+        cluck(0.28, 1.05)
+      } else if (mood === 'hambre') {
+        cluck(0, 0.95)
+        cluck(0.13, 0.9)
+        cluck(0.26, 0.95)
+        cluck(0.39, 0.9)
+      } else if (mood === 'sueno') {
+        slide(300, 160, 0, 0.4, 'square', 0.06)
+      } else if (mood === 'triste') {
+        slide(340, 180, 0, 0.55, 'square', 0.08)
+      } else if (mood === 'enojado') {
+        cluck(0, 1.2)
+        cluck(0.12, 1.2)
+        cluck(0.24, 1.2)
+        cluck(0.36, 1.25)
+      } else if (mood === 'miedo') {
+        squawk(0, 0.55)
+      } else {
+        cluck(0)
+        cluck(0.15)
+      }
+      break
+    case 'duck':
+      if (mood === 'feliz') {
+        quack(0, 1.1)
+        quack(0.2, 1.15)
+        quack(0.4, 1.05)
+      } else if (mood === 'hambre') {
+        quack(0, 1)
+        quack(0.18, 1)
+        quack(0.36, 1.05)
+      } else if (mood === 'sueno') {
+        slide(240, 140, 0, 0.45, 'square', 0.06)
+      } else if (mood === 'triste') {
+        slide(280, 130, 0, 0.6, 'square', 0.08)
+      } else if (mood === 'enojado') {
+        quack(0, 1.25)
+        quack(0.18, 1.25)
+        quack(0.36, 1.3)
+      } else if (mood === 'miedo') {
+        quack(0, 1.6)
+        quack(0.2, 1.7)
+        squawk(0.4, 0.4, 0.8)
+      } else {
+        quack(0)
+        quack(0.2)
+      }
+      break
+    case 'turtle':
+      if (mood === 'feliz') {
+        plop(0)
+        plop(0.35)
+      } else if (mood === 'hambre') {
+        plop(0)
+        slide(150, 100, 0.3, 0.3, 'sine', 0.07)
+      } else if (mood === 'sueno') {
+        snore(0)
+      } else if (mood === 'triste') {
+        slide(160, 70, 0, 0.7, 'sine', 0.09)
+      } else if (mood === 'enojado') {
+        hiss(0, 0.5)
+      } else if (mood === 'miedo') {
+        // se mete en el caparazón: ¡plop! y silencio
+        plop(0)
+        slide(220, 60, 0.18, 0.5, 'sine', 0.07)
+      } else {
+        plop(0)
       }
       break
     case 'fox':
@@ -257,6 +484,13 @@ export function petVoice(catalogId: string, mood: Mood) {
         yawn(0)
       } else if (mood === 'triste') {
         slide(520, 300, 0, 0.55, 'sine', 0.08)
+      } else if (mood === 'enojado') {
+        growl(0, 0.4, 130)
+        yip(0.25, 0.9)
+        yip(0.4, 0.85)
+      } else if (mood === 'miedo') {
+        yelp(0)
+        yip(0.3, 1.5)
       } else {
         yip(0)
         yip(0.14)
@@ -273,6 +507,11 @@ export function petVoice(catalogId: string, mood: Mood) {
         snore(0)
       } else if (mood === 'triste') {
         growl(0, 0.6, 85)
+      } else if (mood === 'enojado') {
+        roar(0, 0.6, 0.12)
+        growl(0.65, 0.5, 90)
+      } else if (mood === 'miedo') {
+        moan(0)
       } else {
         growl(0, 0.4, 115)
       }
@@ -288,6 +527,11 @@ export function petVoice(catalogId: string, mood: Mood) {
         snore(0)
       } else if (mood === 'triste') {
         slide(400, 260, 0, 0.55, 'sine', 0.08)
+      } else if (mood === 'enojado') {
+        bleat(0, 0.7)
+        growl(0.3, 0.4, 110)
+      } else if (mood === 'miedo') {
+        bleat(0, 1.7)
       } else {
         bleat(0)
       }
@@ -302,6 +546,11 @@ export function petVoice(catalogId: string, mood: Mood) {
         snore(0)
       } else if (mood === 'triste') {
         slide(140, 65, 0, 0.8, 'sawtooth', 0.1)
+      } else if (mood === 'enojado') {
+        roar(0, 0.9, 0.15)
+        roar(0.95, 0.6, 0.13)
+      } else if (mood === 'miedo') {
+        growl(0, 0.7, 120)
       } else {
         roar(0, 0.7)
       }
@@ -319,6 +568,13 @@ export function petVoice(catalogId: string, mood: Mood) {
         snore(0)
       } else if (mood === 'triste') {
         slide(220, 110, 0, 0.5, 'square', 0.07)
+      } else if (mood === 'enojado') {
+        oink(0, 0.8)
+        oink(0.14, 0.75)
+        oink(0.28, 0.8)
+        oink(0.42, 0.75)
+      } else if (mood === 'miedo') {
+        squeal(0)
       } else {
         oink(0)
         oink(0.17)
@@ -335,6 +591,12 @@ export function petVoice(catalogId: string, mood: Mood) {
         yawn(0)
       } else if (mood === 'triste') {
         slide(500, 280, 0, 0.6, 'sine', 0.08)
+      } else if (mood === 'enojado') {
+        chatter(0, 1.4, 0.85)
+        chatter(0.4, 1.4, 0.8)
+      } else if (mood === 'miedo') {
+        chatter(0, 2, 1.6)
+        slide(900, 1400, 0.45, 0.3, 'sine', 0.08)
       } else {
         chatter(0)
       }
@@ -342,6 +604,8 @@ export function petVoice(catalogId: string, mood: Mood) {
     default:
       // animal desconocido: sonido genérico
       if (mood === 'feliz') tone(784, 0, 0.12, 'sine', 0.07)
+      else if (mood === 'enojado') growl(0, 0.4, 100)
+      else if (mood === 'miedo') yelp(0)
       else tone(392, 0, 0.12, 'sine', 0.07)
   }
 }
@@ -391,5 +655,33 @@ export const sfx = {
     tone(784, 0.24, 0.12, 'triangle', 0.09)
     tone(1047, 0.36, 0.22, 'triangle', 0.1)
     tone(1319, 0.5, 0.3, 'sine', 0.08)
+  },
+  /** ¡boing! de la pelota al caer */
+  boing() {
+    slide(320, 110, 0, 0.12, 'triangle', 0.12)
+    slide(110, 260, 0.12, 0.1, 'triangle', 0.08)
+    slide(260, 120, 0.22, 0.08, 'triangle', 0.06)
+  },
+  /** whoosh de lanzamiento */
+  whoosh() {
+    noise(0, 0.18, 0.05, 900)
+    slide(600, 200, 0, 0.16, 'sine', 0.04)
+  },
+  /** lluvia empezando (ruido suave de fondo) */
+  rain() {
+    noise(0, 0.9, 0.035, 500)
+    noise(0.2, 0.8, 0.03, 800)
+  },
+  /** campanita de sorpresa/evento */
+  alarm() {
+    tone(880, 0, 0.1, 'triangle', 0.08)
+    tone(880, 0.16, 0.1, 'triangle', 0.08)
+    tone(1174, 0.32, 0.18, 'triangle', 0.08)
+  },
+  /** premio por buen comportamiento */
+  treat() {
+    tone(659, 0, 0.08, 'triangle', 0.08)
+    tone(880, 0.09, 0.08, 'triangle', 0.08)
+    tone(1174, 0.18, 0.16, 'triangle', 0.09)
   },
 }

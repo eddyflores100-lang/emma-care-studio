@@ -296,3 +296,132 @@ body {
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* ===== caos divertido: persecuciones, lluvia, pelota... ===== */
+
+/* la pantalla tiembla cuando el perro persigue al gato */
+@keyframes emma-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  20% {
+    transform: translate(-5px, 3px) rotate(-0.4deg);
+  }
+  40% {
+    transform: translate(5px, -3px) rotate(0.4deg);
+  }
+  60% {
+    transform: translate(-4px, -2px) rotate(-0.3deg);
+  }
+  80% {
+    transform: translate(4px, 2px) rotate(0.3deg);
+  }
+}
+.canvas-shake {
+  animation: emma-shake 0.28s linear infinite;
+}
+
+/* saltitos mientras corren en una persecución */
+@keyframes emma-hop {
+  0%,
+  100% {
+    transform: scaleX(var(--face, 1)) translateY(0);
+  }
+  50% {
+    transform: scaleX(var(--face, 1)) translateY(-26%) scale(1.04);
+  }
+}
+.pet-hop {
+  animation: emma-hop 0.26s ease-in-out infinite;
+}
+
+/* gotas de lluvia */
+@keyframes emma-rain {
+  from {
+    transform: translateY(0);
+    opacity: 0.85;
+  }
+  to {
+    transform: translateY(115vh);
+    opacity: 0.35;
+  }
+}
+.rain-drop {
+  animation-name: emma-rain;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+/* mariposa que cruza el mundo */
+@keyframes emma-fly {
+  0% {
+    left: -6%;
+    top: 42%;
+  }
+  20% {
+    left: 22%;
+    top: 18%;
+  }
+  40% {
+    left: 45%;
+    top: 45%;
+  }
+  60% {
+    left: 65%;
+    top: 22%;
+  }
+  80% {
+    left: 84%;
+    top: 48%;
+  }
+  100% {
+    left: 106%;
+    top: 30%;
+  }
+}
+.butterfly {
+  animation: emma-fly 6.5s linear infinite;
+}
+
+/* la pelota cae con rebote */
+@keyframes emma-ball-drop {
+  0% {
+    transform: translate(-50%, -420%) scale(0.85);
+    opacity: 0;
+  }
+  55% {
+    transform: translate(-50%, -60%) scale(1);
+    opacity: 1;
+  }
+  70% {
+    transform: translate(-50%, -110%) scale(1.02);
+  }
+  85% {
+    transform: translate(-50%, -60%) scale(0.96);
+  }
+  100% {
+    transform: translate(-50%, -60%) scale(1);
+  }
+}
+.ball-drop {
+  animation: emma-ball-drop 0.6s ease-out;
+  transform: translate(-50%, -60%);
+}
+
+/* caja sorpresa que aparece con brillos */
+@keyframes emma-gift {
+  0% {
+    transform: translate(-50%, -60%) scale(0) rotate(-30deg);
+  }
+  60% {
+    transform: translate(-50%, -60%) scale(1.25) rotate(8deg);
+  }
+  100% {
+    transform: translate(-50%, -60%) scale(1) rotate(0deg);
+  }
+}
+.gift-pop {
+  animation: emma-gift 0.5s ease-out;
+  transform: translate(-50%, -60%);
+}

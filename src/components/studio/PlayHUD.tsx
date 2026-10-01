@@ -1,11 +1,12 @@
 'use client'
 
-// HUD del modo juego: selección de mascota, barras de necesidades y botones
-// de cuidado (alimentar, acariciar, jugar, bañar, dormir, curar).
+// HUD del modo juego: selección de mascota, barras de necesidades, botones
+// de cuidado (alimentar, acariciar, jugar, bañar, dormir, curar) y órdenes
+// de adiestramiento (¡Sentado! ¡Quieto! ¡Ven!) + lanzar la pelota.
 
 import { useStudio } from '@/lib/studio/store'
 import { STATS, STAT_KEYS, catalogById } from '@/lib/studio/catalog'
-import { PlayerAction } from '@/lib/studio/types'
+import { Command, PlayerAction } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
 
 const ACTIONS: { id: PlayerAction; emoji: string; label: string }[] = [
@@ -22,8 +23,11 @@ export function PlayHUD() {
   const petsMap = useStudio((s) => s.pets)
   const selectedId = useStudio((s) => s.selectedId)
   const currentLevel = useStudio((s) => s.currentLevel)
+  const ballPending = useStudio((s) => s.ballPending)
   const select = useStudio((s) => s.select)
   const playerAction = useStudio((s) => s.playerAction)
+  const giveCommand = useStudio((s) => s.giveCommand)
+  const toggleBallMode = useStudio((s) => s.toggleBallMode)
   const actionCd = useStudio((s) => s.actionCd)
 
   if (mode !== 'play') return null
@@ -35,7 +39,7 @@ export function PlayHUD() {
   const rt = sel ? petsMap[sel.id] : null
   const now = Date.now()
 
-  const cooling = (a: PlayerAction) =>
+  const cooling = (a: PlayerAction | 'cmd') =>
     rt && sel ? now - (actionCd[`${sel.id}:${a}`] ?? 0) < 3500 : false
 
   const sleepAction = {
@@ -152,8 +156,51 @@ export function PlayHUD() {
             )}
           </div>
 
+          {/* órdenes de adiestramiento + pelota */}
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="shrink-0 text-[10px] font-black tracking-wide text-slate-400">
+              ÓRDENES:
+            </span>
+            <div className="grid flex-1 grid-cols-4 gap-1.5">
+              {(
+                [
+                  { id: 'sit', emoji: '🪑', label: '¡Sentado!' },
+                  { id: 'stay', emoji: '✋', label: '¡Quieto!' },
+                  { id: 'come', emoji: '👉', label: '¡Ven!' },
+                ] as { id: Command; emoji: string; label: string }[]
+              ).map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => giveCommand(c.id)}
+                  disabled={cooling('cmd')}
+                  className={cn(
+                    'flex h-11 flex-col items-center justify-center gap-0 rounded-2xl border-2 text-[10px] font-black transition-all active:scale-95',
+                    cooling('cmd')
+                      ? 'border-slate-100 bg-slate-50 opacity-40'
+                      : 'border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100',
+                  )}
+                >
+                  <span className="text-lg leading-none">{c.emoji}</span>
+                  {c.label}
+                </button>
+              ))}
+              <button
+                onClick={toggleBallMode}
+                className={cn(
+                  'flex h-11 flex-col items-center justify-center gap-0 rounded-2xl border-2 text-[10px] font-black transition-all active:scale-95',
+                  ballPending
+                    ? 'border-rose-500 bg-rose-500 text-white'
+                    : 'border-lime-300 bg-lime-50 text-lime-700 hover:bg-lime-100',
+                )}
+              >
+                <span className="text-lg leading-none">🎾</span>
+                {ballPending ? '¡Lanza!' : 'Pelota'}
+              </button>
+            </div>
+          </div>
+
           <p className="mt-2 hidden text-center text-[11px] font-bold text-slate-400 sm:block">
-            🪙 Gana monedas cuidando a {sel.name} · gástalas en la 🛍 Tienda
+            🪙 Gana monedas cuidando a {sel.name} · acaríciala frotando el dedo 👆 · gástalas en la 🛍 Tienda
           </p>
         </>
       )}

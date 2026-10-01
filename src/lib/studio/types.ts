@@ -11,7 +11,14 @@ export type SpecialKind = 'food' | 'bed' | 'toy' | 'bath'
 export type LevelId = 'jardin' | 'casa' | 'hospital' | 'playa'
 
 /** Ánimo de la mascota: decide su voz y su cara */
-export type Mood = 'feliz' | 'hambre' | 'sueno' | 'normal' | 'triste'
+export type Mood =
+  | 'feliz'
+  | 'hambre'
+  | 'sueno'
+  | 'normal'
+  | 'triste'
+  | 'enojado'
+  | 'miedo'
 
 export interface LevelDef {
   id: LevelId
@@ -30,6 +37,12 @@ export interface CatalogItem {
   name: string
   kind: ObjKind
   special?: SpecialKind
+  /** las mascotas pueden esconderse aquí para escapar de sus rivales */
+  hide?: boolean
+  /** las mascotas pueden treparse aquí para escapar */
+  climb?: boolean
+  /** refugio contra la lluvia */
+  shelter?: boolean
 }
 
 export interface WorldObject {
@@ -69,6 +82,30 @@ export interface Rule {
 
 export type PetState = 'idle' | 'walk' | 'eat' | 'sleep'
 
+/** órdenes de obediencia que el dueño puede dar */
+export type Command = 'sit' | 'stay' | 'come'
+
+/** sorpresas aleatorias del juego */
+export type EventKind = 'lluvia' | 'escasez' | 'mariposa' | 'regalo'
+
+export interface GameEvent {
+  kind: EventKind
+  /** momento en que termina */
+  until: number
+  /** para el regalo: posición de la caja sorpresa */
+  x?: number
+  y?: number
+}
+
+/** pelota lanzable por el dueño (el perro y el zorro la buscan) */
+export interface Ball {
+  id: string
+  x: number
+  y: number
+  /** momento en que desaparece si nadie la recoge */
+  until: number
+}
+
 export interface PetRuntime {
   stats: Record<StatKey, number>
   state: PetState
@@ -86,6 +123,19 @@ export interface PetRuntime {
   voiceAt: number
   /** cooldowns por pareja regla/mascota/objeto y objetos especiales */
   pairCd: Record<string, number>
+  // ===== persecuciones entre rivales (¡el perro detrás del gato!) =====
+  /** si > now, está en una persecución */
+  chaseUntil: number
+  chaseRole: 'chase' | 'flee' | null
+  chasePartner: string | null
+  /** próximo recálculo de rumbo de huida */
+  fleeAt: number
+  /** si está escondido: id del objeto tras el que se esconde */
+  hiding: string | null
+  /** si está trepado: id del objeto encima del que está */
+  onTopOf: string | null
+  // ===== órdenes del dueño (sentado, quieto, ven) =====
+  obey: { cmd: Command; until: number } | null
 }
 
 export interface Particle {
@@ -125,3 +175,9 @@ export type ShopItemId =
   | 'panda'
   | 'bear'
   | 'lion'
+  | 'mouse'
+  | 'bird'
+  | 'chicken'
+  | 'hamster'
+  | 'duck'
+  | 'turtle'

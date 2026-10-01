@@ -6,6 +6,10 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
 import {
+  Ball,
+  Command,
+  EventKind,
+  GameEvent,
   LevelId,
   Mood,
   Particle,
@@ -20,6 +24,7 @@ import {
 import {
   LEVELS,
   PET_NAMES,
+  RIVALS,
   STATS,
   VOICES,
   catalogById,
@@ -35,6 +40,44 @@ const SAVE_KEY = 'emma-care-studio-v1'
 const clamp = (v: number) => Math.max(0, Math.min(100, v))
 const clampPct = (v: number) => Math.max(3, Math.min(97, v))
 const rand = (a: number, b: number) => a + Math.random() * (b - a)
+
+/** duración de una persecución entre rivales (ms) */
+const CHASE_MS = 5200
+
+/** vibra el teléfono (Android Chrome; en iPhone no está disponible y no pasa nada) */
+function vib(pattern: number | number[]) {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+    try {
+      navigator.vibrate(pattern)
+    } catch {
+      // algunos navegadores lo bloquean sin interacción: no pasa nada
+    }
+  }
+}
+
+/** catálogo de sorpresas aleatorias */
+const EVENT_INFO: Record<EventKind, { emoji: string; dur: number; msg: string }> = {
+  lluvia: {
+    emoji: '🌧️',
+    dur: 30000,
+    msg: '🌧️ ¡Está lloviendo! Lleva a tus mascotas a un refugio (🏠 ⛺ 🌳 ⛱️)',
+  },
+  escasez: {
+    emoji: '🥣',
+    dur: 20000,
+    msg: '🥣 ¡Se acabó la comida! Sus barras de comida bajan más rápido',
+  },
+  mariposa: {
+    emoji: '🦋',
+    dur: 16000,
+    msg: '🦋 ¡Una mariposa visita el mundo! Las mascotas la siguen encantadas',
+  },
+  regalo: {
+    emoji: '🎁',
+    dur: 25000,
+    msg: '🎁 ¡Ha aparecido una caja sorpresa! Tócala antes de que se vaya',
+  },
+}
 
 const isPetObj = (o: WorldObject) => catalogById[o.catalogId]?.kind === 'pet'
 
@@ -62,6 +105,13 @@ function makeRuntime(): PetRuntime {
     toyAt: 0,
     voiceAt: 0,
     pairCd: {},
+    chaseUntil: 0,
+    chaseRole: null,
+    chasePartner: null,
+    fleeAt: 0,
+    hiding: null,
+    onTopOf: null,
+    obey: null,
   }
 }
 
@@ -73,6 +123,23 @@ function moodOf(rt: PetRuntime): Mood {
   if (rt.stats.felicidad < 25) return 'triste'
   if (rt.stats.felicidad >= 85) return 'feliz'
   return 'normal'
+}
+
+/** busca el escondite o trepadera más cercano (para escapar de un rival) */
+function nearestEscapeSpot(levelObjs: WorldObject[], from: WorldObject) {
+  let best: WorldObject | null = null
+  let bestD = 38
+  for (const o of levelObjs) {
+    if (isPetObj(o)) continue
+    const it = catalogById[o.catalogId]
+    if (!it || (!it.hide && !it.climb)) continue
+    const d = Math.hypot(o.x - from.x, o.y - from.y)
+    if (d < bestD) {
+      bestD = d
+      best = o
+    }
+  }
+  return best
 }
 
 export type MobileTab = 'objetos' | 'ajustes' | 'reglas'
@@ -98,6 +165,17 @@ interface StudioState {
   ruleAcc: Record<string, number>
   actionCd: Record<string, number>
   lastBonusAt: number
+  // ===== caos divertido =====
+  /** sorpresa activa (lluvia, escasez, mariposa, regalo) */
+  event: GameEvent | null
+  /** momento del próximo evento sorpresa */
+  nextEventAt: number
+  /** pelota en juego (la lanzó el dueño) */
+  ball: Ball | null
+  /** modo lanzar pelota: el próximo toque en el mundo la lanza */
+  ballPending: boolean
+  /** mientras now < shakeUntil, el lienzo tiembla (¡persecuciones!) */
+  shakeUntil: number
 
   hydrate: () => void
   addObject: (catalogId: string, x?: number, y?: number) => void
@@ -120,6 +198,16 @@ interface StudioState {
   toggleMute: () => void
   buyShopItem: (itemId: ShopItemId) => void
   playerAction: (action: PlayerAction) => void
+  /** acariciar con el dedo: frotar la mascota en pantalla */
+  petPet: (id: string) => void
+  /** dar una orden de obediencia a la mascota seleccionada */
+  giveCommand: (cmd: Command) => void
+  /** activar/desactivar el modo lanzar pelota */
+  toggleBallMode: () => void
+  /** lanzar la pelota a un punto del mundo */
+  throwBallAt: (x: number, y: number) => void
+  /** abrir la caja sorpresa (evento regalo) */
+  claimGift: () => void
   moveTick: (dtMs: number) => void
   gameTick: () => void
   spawnParticles: (emoji: string, x: number, y: number, n?: number) => void
@@ -173,6 +261,11 @@ export const useStudio = create<StudioState>((set, get) => {
     ruleAcc: {},
     actionCd: {},
     lastBonusAt: 0,
+    event: null,
+    nextEventAt: 0,
+    ball: null,
+    ballPending: false,
+    shakeUntil: 0,
 
     hydrate: () => {
       if (get().hydrated) return
@@ -332,6 +425,11 @@ export const useStudio = create<StudioState>((set, get) => {
         ruleAcc: {},
         actionCd: {},
         lastBonusAt: now,
+        event: null,
+        nextEventAt: now + rand(35000, 60000),
+        ball: null,
+        ballPending: false,
+        shakeUntil: 0,
         selectedId: null,
       })
       sfx.happy()
@@ -346,7 +444,18 @@ export const useStudio = create<StudioState>((set, get) => {
       }, 350)
     },
 
-    stopPlay: () => set({ mode: 'edit', pets: {}, particles: [], say: {}, selectedId: null }),
+    stopPlay: () =>
+      set({
+        mode: 'edit',
+        pets: {},
+        particles: [],
+        say: {},
+        selectedId: null,
+        event: null,
+        ball: null,
+        ballPending: false,
+        shakeUntil: 0,
+      }),
 
     addRule: () => {
       const s = get()
@@ -449,12 +558,18 @@ export const useStudio = create<StudioState>((set, get) => {
       const prices: Record<ShopItemId, number> = {
         cake: 15,
         toy: 30,
+        mouse: 20,
+        bird: 30,
         cat: 40,
+        chicken: 45,
         rabbit: 60,
+        hamster: 55,
+        duck: 70,
         fox: 80,
         pig: 90,
         monkey: 100,
         panda: 120,
+        turtle: 110,
         bear: 140,
         lion: 180,
       }
@@ -604,12 +719,187 @@ export const useStudio = create<StudioState>((set, get) => {
       set({ pets: { ...s.pets, [pet.id]: rt }, coins, actionCd })
     },
 
+    /** acariciar con el dedo: frotar la mascota en la pantalla */
+    petPet: (id) => {
+      const s = get()
+      if (s.mode !== 'play') return
+      const pet = s.objects.find((o) => o.id === id && isPetObj(o))
+      if (!pet) return
+      const rt0 = s.pets[id]
+      if (!rt0) return
+      const now = Date.now()
+      if (now - (s.actionCd[`${id}:caricia`] ?? 0) < 3000) return
+      const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats } }
+      rt.stats.felicidad = clamp(rt.stats.felicidad + 7)
+      set({
+        pets: { ...s.pets, [id]: rt },
+        actionCd: { ...s.actionCd, [`${id}:caricia`]: now },
+      })
+      get().spawnParticles('❤️', pet.x, pet.y - 3, 2)
+      get().spawnParticles('✨', pet.x, pet.y - 1, 1)
+      sfx.happy()
+      speak(set, get, pet, 'feliz')
+      // reglas del tipo "CUANDO la acaricies..."
+      for (const rule of s.rules) {
+        if (rule.trigger !== 'acariciar') continue
+        if (rule.petId !== 'cualquiera' && rule.petId !== pet.id) continue
+        const cur = get().pets[pet.id]
+        if (!cur) continue
+        const delta = rule.effect === 'aumentar' ? rule.amount : -rule.amount
+        set({
+          pets: {
+            ...get().pets,
+            [pet.id]: {
+              ...cur,
+              stats: { ...cur.stats, [rule.stat]: clamp(cur.stats[rule.stat] + delta) },
+            },
+          },
+        })
+        get().spawnParticles(delta > 0 ? STATS[rule.stat].emoji : '💨', pet.x, pet.y - 5, 1)
+      }
+    },
+
+    /** dar una orden al dueño: ¡sentado! ¡quieto! ¡ven! (premio por obediencia) */
+    giveCommand: (cmd) => {
+      const s = get()
+      if (s.mode !== 'play') return
+      const pet = s.objects.find((o) => o.id === s.selectedId && isPetObj(o))
+      if (!pet) {
+        toast('👆 Primero toca una mascota para darle la orden')
+        return
+      }
+      const rt0 = s.pets[pet.id]
+      if (!rt0) return
+      const now = Date.now()
+      const cdKey = `${pet.id}:cmd`
+      if (now - (s.actionCd[cdKey] ?? 0) < 2500) {
+        toast('⏳ ¡Un poquito de espera!')
+        return
+      }
+      const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
+      let coins = s.coins
+      const actionCd = { ...s.actionCd, [cdKey]: now }
+      const newPets = { ...s.pets }
+
+      // ¡la obediencia salva! si lo están persiguiendo, se acaba la persecución
+      let stoppedChase = false
+      if (rt.chaseUntil > now && rt.chasePartner) {
+        stoppedChase = true
+        const partner = s.objects.find((o) => o.id === rt.chasePartner)
+        const prt = partner ? s.pets[partner.id] : null
+        rt.chaseUntil = 0
+        rt.chaseRole = null
+        rt.chasePartner = null
+        rt.hiding = null
+        rt.onTopOf = null
+        if (partner && prt) {
+          newPets[partner.id] = {
+            ...prt,
+            chaseUntil: 0,
+            chaseRole: null,
+            chasePartner: null,
+            pairCd: {
+              ...prt.pairCd,
+              [`rival:${partner.id}:${pet.id}`]: now,
+            },
+          }
+          speak(set, get, partner, 'triste')
+        }
+      }
+
+      rt.obey = {
+        cmd,
+        until: now + (cmd === 'sit' ? 6000 : cmd === 'stay' ? 8000 : 5000),
+      }
+      rt.state = 'idle'
+      rt.wanderAt = now + 10000
+
+      const cmdMsg =
+        cmd === 'sit' ? '🪑 ¡Sentado!' : cmd === 'stay' ? '✋ ¡Quieto!' : '👉 ¡Ven aquí!'
+      get().spawnParticles(
+        cmd === 'sit' ? '🪑' : cmd === 'stay' ? '✋' : '👉',
+        pet.x,
+        pet.y - 4,
+        1,
+      )
+
+      // premio por buen comportamiento
+      if (!rt.sick) {
+        coins += 2
+        if (Math.random() < 0.45) get().spawnParticles('🦴', pet.x, pet.y - 2, 1)
+      }
+      speak(set, get, pet, 'normal')
+      sfx.treat()
+      toast(
+        `${cmdMsg} — ¡${pet.name} obedeció! +2 🪙${stoppedChase ? ' 😎 ¡escapó del rival!' : ''}`,
+        { duration: 3000 },
+      )
+      set({ pets: { ...newPets, [pet.id]: rt }, coins, actionCd })
+    },
+
+    toggleBallMode: () => {
+      const next = !get().ballPending
+      set({ ballPending: next })
+      if (next) {
+        toast('🎾 ¡Toca el mundo donde quieras lanzar la pelota!', { duration: 3500 })
+        sfx.click()
+      }
+    },
+
+    throwBallAt: (x, y) => {
+      const s = get()
+      if (s.mode !== 'play') return
+      const ball: Ball = { id: uid(), x, y, until: Date.now() + 12000 }
+      set({ ball, ballPending: false })
+      sfx.whoosh()
+      setTimeout(() => sfx.boing(), 350)
+      get().spawnParticles('💨', x, y - 6, 1)
+    },
+
+    claimGift: () => {
+      const s = get()
+      if (s.mode !== 'play' || !s.event || s.event.kind !== 'regalo') return
+      const now = Date.now()
+      const gx = s.event.x ?? 50
+      const gy = s.event.y ?? 50
+      const roll = Math.random()
+      if (roll < 0.55) {
+        const prize = Math.floor(rand(8, 16))
+        set({ coins: s.coins + prize, event: { ...s.event, until: now } })
+        get().spawnParticles('🪙', gx, gy - 4, 4)
+        toast(`🎁 ¡${prize} monedas de sorpresa! +${prize} 🪙`)
+        sfx.coin()
+      } else if (roll < 0.85) {
+        const pets = { ...s.pets }
+        for (const id of Object.keys(pets)) {
+          const rt = pets[id]
+          pets[id] = {
+            ...rt,
+            stats: { ...rt.stats, felicidad: clamp(rt.stats.felicidad + 15) },
+          }
+        }
+        set({ pets, event: { ...s.event, until: now } })
+        get().spawnParticles('🎉', gx, gy - 4, 4)
+        toast('🎁 ¡FIESTA SORPRESA! Todas las mascotas felices ❤️')
+        sfx.unlock()
+      } else {
+        set({ coins: s.coins + 25, event: { ...s.event, until: now } })
+        get().spawnParticles('💎', gx, gy - 4, 4)
+        toast('🎁 ¡Un diamante escondido! +25 🪙')
+        sfx.coin()
+      }
+      vib(80)
+    },
+
     moveTick: (dtMs) => {
       const s = get()
       if (s.mode !== 'play') return
       const now = Date.now()
       const dt = Math.min(dtMs, 120) / 1000
       let moved = false
+      let coins = s.coins
+      let ballCaught = false
+      let shakeUntil = s.shakeUntil
       const objects = s.objects.map((o) => ({ ...o }))
       const pets: Record<string, PetRuntime> = { ...s.pets }
       // solo se simula el mundo visible; las mascotas de otros mundos descansan
@@ -619,6 +909,11 @@ export const useStudio = create<StudioState>((set, get) => {
       const bed = findSpecial(levelObjs, 'bed')
       const toy = findSpecial(levelObjs, 'toy')
       const bath = findSpecial(levelObjs, 'bath')
+      const raining = s.event?.kind === 'lluvia' && s.event.until > now
+      const shelters = raining
+        ? levelObjs.filter((o) => catalogById[o.catalogId]?.shelter)
+        : []
+      const ball = s.ball && s.ball.until > now ? s.ball : null
 
       for (const obj of petObjs) {
         const rt0 = s.pets[obj.id]
@@ -642,6 +937,177 @@ export const useStudio = create<StudioState>((set, get) => {
           continue
         }
 
+        // ===== ¿acaba de terminar una persecución? =====
+        if (rt.chaseUntil && now >= rt.chaseUntil) {
+          const escaped = rt.chaseRole === 'flee' && (rt.hiding || rt.onTopOf)
+          rt.chaseUntil = 0
+          rt.chaseRole = null
+          rt.chasePartner = null
+          rt.hiding = null
+          rt.onTopOf = null
+          rt.stats.energia = clamp(rt.stats.energia - 6)
+          rt.wanderAt = now + 1500
+          if (escaped && now - (rt.pairCd['escapePrize'] ?? 0) > 25000) {
+            rt.pairCd['escapePrize'] = now
+            coins += 2
+            get().spawnParticles('⭐', obj.x, obj.y - 5, 2)
+            toast(`😆 ¡${obj.name} escapó de la persecución! +2 🪙`, { duration: 2500 })
+            sfx.treat()
+            speak(set, get, obj, 'feliz')
+          }
+        }
+
+        // ===== ÓRDENES DEL DUEÑO: ¡sentado, quieto, ven! =====
+        if (rt.obey && now >= rt.obey.until) rt.obey = null
+        if (rt.obey) {
+          if (rt.obey.cmd === 'come') {
+            const dx = 50 - obj.x
+            const dy = 84 - obj.y
+            const dist = Math.hypot(dx, dy)
+            const step = (obj.speed ?? 8) * 1.7 * dt
+            if (dist <= Math.max(1.5, step)) {
+              rt.state = 'idle'
+              rt.wanderAt = now + 2500
+              get().spawnParticles('⭐', obj.x, obj.y - 4, 1)
+            } else {
+              obj.x = clampPct(obj.x + (dx / dist) * step)
+              obj.y = clampPct(obj.y + (dy / dist) * step)
+              if (Math.abs(dx) > 0.5) rt.facing = dx > 0 ? 1 : -1
+              rt.state = 'walk'
+              moved = true
+            }
+          } else {
+            // sentado o quieto: no se mueve de ahí
+            rt.state = 'idle'
+          }
+          pets[obj.id] = rt
+          continue
+        }
+
+        // ===== PERSECUCIÓN: el que persigue detrás, el que huye delante =====
+        if (rt.chaseUntil > now && rt.chaseRole && rt.chasePartner) {
+          const partner = petObjs.find((o) => o.id === rt.chasePartner)
+          if (!partner) {
+            rt.chaseUntil = 0
+            rt.chaseRole = null
+            rt.chasePartner = null
+            rt.hiding = null
+            rt.onTopOf = null
+          } else {
+            rt.state = 'walk'
+            let speedMul = 1.55
+            if (rt.chaseRole === 'chase') {
+              const yrt = pets[partner.id]
+              const preyGone = !!(yrt && (yrt.hiding || yrt.onTopOf))
+              if (preyGone) {
+                // la presa escapó: da vueltas un momento y se rinde
+                if (!rt.pairCd['giveup']) rt.pairCd['giveup'] = now + 1700
+                if (now >= rt.pairCd['giveup']) {
+                  rt.chaseUntil = now
+                  speak(set, get, obj, 'triste')
+                } else if (now >= rt.fleeAt) {
+                  rt.fleeAt = now + 600
+                  rt.tx = clampPct(partner.x + rand(-9, 9))
+                  rt.ty = clampPct(partner.y + rand(-7, 7))
+                }
+                speedMul = 1.1
+              } else {
+                rt.tx = partner.x
+                rt.ty = partner.y
+              }
+            } else {
+              // huir: buscar escondite o carrera en zigzag
+              if (now >= rt.fleeAt) {
+                rt.fleeAt = now + 620
+                const spot = nearestEscapeSpot(levelObjs, obj)
+                if (spot) {
+                  rt.tx = spot.x
+                  rt.ty = clampPct(spot.y + 3)
+                } else {
+                  const ang =
+                    Math.atan2(obj.y - partner.y, obj.x - partner.x) + rand(-0.8, 0.8)
+                  rt.tx = clampPct(obj.x + Math.cos(ang) * 32)
+                  rt.ty = clampPct(obj.y + Math.sin(ang) * 32)
+                }
+              }
+              speedMul = 1.95
+            }
+            const dx = rt.tx - obj.x
+            const dy = rt.ty - obj.y
+            const dist = Math.hypot(dx, dy)
+            const step = (obj.speed ?? 8) * speedMul * dt
+            if (dist > 1.2) {
+              obj.x = clampPct(obj.x + (dx / dist) * step)
+              obj.y = clampPct(obj.y + (dy / dist) * step)
+              if (Math.abs(dx) > 0.5) rt.facing = dx > 0 ? 1 : -1
+              moved = true
+            }
+            // ¿la presa alcanzó un escondite o trepadera? (tras 1.1 s de carrera)
+            if (
+              rt.chaseRole === 'flee' &&
+              !rt.hiding &&
+              !rt.onTopOf &&
+              now > rt.chaseUntil - CHASE_MS + 1100
+            ) {
+              const near = levelObjs.find((o) => {
+                const it = catalogById[o.catalogId]
+                return (
+                  !isPetObj(o) &&
+                  it &&
+                  (it.hide || it.climb) &&
+                  Math.hypot(o.x - obj.x, o.y - obj.y) < 8
+                )
+              })
+              if (near) {
+                const it = catalogById[near.catalogId]
+                if (it.climb && Math.random() < 0.6) {
+                  rt.onTopOf = near.id
+                  get().spawnParticles('💨', obj.x, obj.y - 6, 2)
+                } else {
+                  rt.hiding = near.id
+                  get().spawnParticles('💨', obj.x, obj.y - 2, 2)
+                }
+                sfx.pop()
+              }
+            }
+          }
+          pets[obj.id] = rt
+          continue
+        }
+
+        // ===== ¡A POR LA PELOTA! (el perro y el zorro la traen) =====
+        if (
+          ball &&
+          (obj.catalogId === 'dog' || obj.catalogId === 'fox') &&
+          !rt.chaseUntil
+        ) {
+          const dx = ball.x - obj.x
+          const dy = ball.y - obj.y
+          const dist = Math.hypot(dx, dy)
+          const step = (obj.speed ?? 8) * 1.65 * dt
+          if (dist <= Math.max(2.5, step)) {
+            ballCaught = true
+            rt.stats.felicidad = clamp(rt.stats.felicidad + 14)
+            rt.stats.energia = clamp(rt.stats.energia - 6)
+            coins += 3
+            get().spawnParticles('🎾', obj.x, obj.y - 5, 3)
+            get().spawnParticles('⭐', obj.x, obj.y - 2, 1)
+            toast(`🎾 ¡${obj.name} atrapó la pelota! +3 🪙`, { duration: 2500 })
+            sfx.treat()
+            speak(set, get, obj, 'feliz')
+            rt.state = 'idle'
+            rt.wanderAt = now + 1200
+          } else {
+            rt.state = 'walk'
+            obj.x = clampPct(obj.x + (dx / dist) * step)
+            obj.y = clampPct(obj.y + (dy / dist) * step)
+            if (Math.abs(dx) > 0.5) rt.facing = dx > 0 ? 1 : -1
+            moved = true
+          }
+          pets[obj.id] = rt
+          continue
+        }
+
         // decidir nuevo destino
         if (rt.state !== 'walk' && now >= rt.wanderAt) {
           if (rt.stats.comida < 50 && food) {
@@ -653,6 +1119,21 @@ export const useStudio = create<StudioState>((set, get) => {
             rt.tx = bed.x
             rt.ty = Math.min(95, bed.y + 6)
             rt.targetKind = 'bed'
+            rt.state = 'walk'
+          } else if (raining && shelters.length) {
+            // ¡que no se mojen! corren al refugio más cercano
+            let best = shelters[0]
+            let bestD = Infinity
+            for (const sh of shelters) {
+              const d = Math.hypot(sh.x - obj.x, sh.y - obj.y)
+              if (d < bestD) {
+                bestD = d
+                best = sh
+              }
+            }
+            rt.tx = best.x
+            rt.ty = Math.min(95, best.y + 5)
+            rt.targetKind = 'random'
             rt.state = 'walk'
           } else {
             rt.tx = rand(8, 92)
@@ -704,7 +1185,73 @@ export const useStudio = create<StudioState>((set, get) => {
           get().spawnParticles('🫧', bath.x, bath.y - 3, 2)
         }
 
+        // curiosidad por la pelota (las demás mascotas también juegan)
+        if (
+          ball &&
+          now >= (rt.pairCd['ball'] ?? 0) &&
+          Math.hypot(ball.x - obj.x, ball.y - obj.y) < 9
+        ) {
+          rt.stats = { ...rt.stats, felicidad: clamp(rt.stats.felicidad + 2) }
+          rt.pairCd['ball'] = now + 6000
+          get().spawnParticles('🎾', ball.x, ball.y - 3, 1)
+        }
+
         pets[obj.id] = rt
+      }
+
+      // ===== ¡RIVALES CERCA! → empieza la persecución (vibra y tiembla) =====
+      for (const pred of petObjs) {
+        const preys = RIVALS[pred.catalogId]
+        if (!preys) continue
+        const prt = pets[pred.id]
+        if (
+          !prt ||
+          prt.state === 'sleep' ||
+          prt.state === 'eat' ||
+          prt.chaseUntil > now ||
+          prt.obey ||
+          prt.sick ||
+          prt.stats.energia < 12
+        )
+          continue
+        for (const prey of petObjs) {
+          if (!preys.includes(prey.catalogId)) continue
+          const yrt = pets[prey.id]
+          if (
+            !yrt ||
+            yrt.state === 'sleep' ||
+            yrt.state === 'eat' ||
+            yrt.chaseUntil > now ||
+            yrt.obey ||
+            yrt.sick ||
+            yrt.hiding ||
+            yrt.onTopOf
+          )
+            continue
+          const key = `rival:${pred.id}:${prey.id}`
+          if (now - (prt.pairCd[key] ?? 0) < 30000) continue
+          const dist = Math.hypot(pred.x - prey.x, pred.y - prey.y)
+          if (dist > 11) continue
+          // ¡EMPIEZA LA PERSECUCIÓN!
+          prt.pairCd[key] = now
+          prt.chaseRole = 'chase'
+          prt.chasePartner = prey.id
+          prt.chaseUntil = now + CHASE_MS
+          prt.state = 'walk'
+          yrt.chaseRole = 'flee'
+          yrt.chasePartner = pred.id
+          yrt.chaseUntil = now + CHASE_MS
+          yrt.fleeAt = 0
+          yrt.state = 'walk'
+          shakeUntil = now + 1300
+          vib([120, 60, 120, 60, 220])
+          speak(set, get, pred, 'enojado')
+          speak(set, get, prey, 'miedo')
+          get().spawnParticles('💢', pred.x, pred.y - 4, 2)
+          get().spawnParticles('❗', prey.x, prey.y - 4, 2)
+          toast(`😈 ¡${pred.name} persigue a ${prey.name}!`, { duration: 3000 })
+          break
+        }
       }
 
       // reglas del tipo "CUANDO se acerque a..." (misma mascota y mismo mundo)
@@ -733,8 +1280,12 @@ export const useStudio = create<StudioState>((set, get) => {
         }
       }
 
-      if (moved) set({ objects, pets })
-      else set({ pets })
+      const patch: Partial<StudioState> = { pets }
+      if (moved) patch.objects = objects
+      if (coins !== s.coins) patch.coins = coins
+      if (ballCaught) patch.ball = null
+      if (shakeUntil !== s.shakeUntil) patch.shakeUntil = shakeUntil
+      set(patch)
       for (const [rule, pet] of fired) fireRule(set, get, rule, pet)
     },
 
@@ -749,6 +1300,51 @@ export const useStudio = create<StudioState>((set, get) => {
       // solo decaen las mascotas del mundo actual (las demás descansan)
       const activePets = s.objects.filter(
         (o) => isPetObj(o) && o.level === s.currentLevel && s.pets[o.id],
+      )
+
+      // ===== SORPRESAS: lluvia, escasez, mariposa, regalo =====
+      let event = s.event
+      let nextEventAt = s.nextEventAt
+      if (event && now >= event.until) {
+        if (event.kind === 'lluvia') {
+          get().spawnParticles('🌈', 50, 16, 2)
+          get().spawnParticles('☀️', 78, 14, 1)
+          toast('🌈 ¡Dejó de llover! ¡Salió un arcoíris!')
+          sfx.happy()
+          for (const id of Object.keys(pets)) {
+            const rt = pets[id]
+            pets[id] = {
+              ...rt,
+              stats: { ...rt.stats, felicidad: clamp(rt.stats.felicidad + 5) },
+            }
+          }
+        } else if (event.kind === 'regalo') {
+          toast('👋 La caja sorpresa se fue… ¡más rápido la próxima vez!')
+        }
+        event = null
+        nextEventAt = now + rand(45000, 85000)
+      }
+      if (!event && now >= nextEventAt && activePets.length > 0) {
+        const kinds: EventKind[] = ['lluvia', 'escasez', 'mariposa', 'regalo']
+        const kind = kinds[Math.floor(Math.random() * kinds.length)]
+        const info = EVENT_INFO[kind]
+        event = {
+          kind,
+          until: now + info.dur,
+          x: rand(22, 78),
+          y: rand(32, 68),
+        }
+        toast(info.msg, { duration: 5000 })
+        sfx.alarm()
+        if (kind === 'lluvia') sfx.rain()
+        if (kind === 'lluvia' || kind === 'regalo') vib(60)
+      }
+
+      const raining = event?.kind === 'lluvia'
+      const hungryDays = event?.kind === 'escasez'
+      const butterfly = event?.kind === 'mariposa'
+      const shelters = s.objects.filter(
+        (o) => o.level === s.currentLevel && catalogById[o.catalogId]?.shelter,
       )
 
       for (const obj of activePets) {
@@ -767,7 +1363,7 @@ export const useStudio = create<StudioState>((set, get) => {
           }
           if (Math.random() < 0.35) get().spawnParticles('💤', obj.x, obj.y - 5, 1)
         } else {
-          rt.stats.comida = clamp(rt.stats.comida - 0.7)
+          rt.stats.comida = clamp(rt.stats.comida - 0.7 - (hungryDays ? 0.6 : 0))
           rt.stats.energia = clamp(rt.stats.energia - 0.4)
           rt.stats.higiene = clamp(rt.stats.higiene - 0.35)
           rt.stats.descanso = clamp(rt.stats.descanso - 0.45)
@@ -776,6 +1372,18 @@ export const useStudio = create<StudioState>((set, get) => {
           if (rt.stats.higiene < 20) decay += 0.5
           if (rt.stats.descanso < 20) decay += 0.4
           if (rt.sick) decay += 0.8
+          if (raining) {
+            // ¿está a cubierto? agustito; si no, se moja y se pone triste
+            const cozy = shelters.some(
+              (sh) => Math.hypot(sh.x - obj.x, sh.y - obj.y) < 11,
+            )
+            if (cozy) rt.stats.felicidad = clamp(rt.stats.felicidad + 0.15)
+            else {
+              rt.stats.higiene = clamp(rt.stats.higiene - 0.3)
+              rt.stats.felicidad = clamp(rt.stats.felicidad - 0.25)
+            }
+          }
+          if (butterfly) rt.stats.felicidad = clamp(rt.stats.felicidad + 0.4)
           rt.stats.felicidad = clamp(rt.stats.felicidad - decay)
         }
 
@@ -817,7 +1425,7 @@ export const useStudio = create<StudioState>((set, get) => {
         if (b.until > now) say[pid] = b
       }
 
-      set({ pets, coins, lastBonusAt, say })
+      set({ pets, coins, lastBonusAt, say, event, nextEventAt })
 
       // reglas del tipo "CADA X segundos..." (mascotas del mundo actual)
       const ruleAcc = { ...s.ruleAcc }

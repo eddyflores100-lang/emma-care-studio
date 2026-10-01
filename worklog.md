@@ -61,3 +61,26 @@ Work Log:
 Stage Summary:
 - Emma Care Studio v0.2: 9 mascotas con voz y carácter, 4 mundos progresivos, economía→desbloqueo, portada compartible
 - Fix crítico: globos de voz se sobrescribían en gameTick (set final usaba copia antigua)
+
+---
+Task ID: 4
+Agent: Super Z (main)
+Task: "¡Caos divertido!" — rivalidades con persecuciones y vibración, escondites/trepaderas, ratón y 5 mascotas más, sorpresas (lluvia/escasez/mariposa/regalo), caricia con el dedo, pelota lanzable y órdenes de obediencia
+
+Work Log:
+- types.ts: Mood + enojado/miedo; CatalogItem + hide/climb/shelter; PetRuntime + chaseUntil/chaseRole/chasePartner/fleeAt/hiding/onTopOf/obey; tipos Command, EventKind, GameEvent, Ball; ShopItemId +6 mascotas
+- catalog.ts: 15 mascotas (nuevos: 🐭 ratón, 🐦 pajarito, 🐔 gallina, 🐹 hámster, 🦆 pato, 🐢 tortuga); RIVALS (perro→gato/ratón/gallina, gato→ratón/pájaro/hámster, zorro→conejo/ratón/gallina/pato, león→mono) + FLEE_FROM inverso; objetos escondite (📦 caja, ⛺ tienda, 🏠 casita, 🌿 arbusto, 🪨 piedra) y trepaderas (🌳🌲🌴 árbol/pino/palmera, 🛋️ sofá, 🗄️ estantería nueva, 🪑 silla) + shelters (lluvia); VOICES 15×7 ánimos; PET_NAMES nuevos; demo con perro+gato+ratón+arbusto+caja (¡persecución instantánea!); fix bug: 'house' no existía en catálogo y la casita del demo era invisible
+- sound.ts: voces nuevas (pi-pi, pío, coc-coc, cuac, plop, trinos…) + enojado (growl/siseo/cacareo de alarma) y miedo (yelp, panicSqueak, squeal, chirrido) para TODAS las especies + sfx boing/whoosh/rain/alarm/treat
+- store.ts: motor de persecuciones — detección de rivales cerca (<11%), chase 5.2s con roles (presa ×1.95 velocidad delante, depredador ×1.55 detrás), vibración navigator.vibrate + shakeUntil (temblor del lienzo), caras 😠/😱, partículas 💢❗; escape: escondite (hiding, tras 1.1s de carrera) o trepar (onTopOf), depredador se rinde con "¡uf!", premio +2🪙 por escapar, cooldown 30s por pareja; órdenes giveCommand (sit/stay/come, +2🪙 premio, ¡la obediencia corta la persecución!); pelota throwBallAt + fetch (perro/zorro van a por ella, +3🪙, boing); eventos aleatorios cada 45-85s: lluvia (30s, mascotas buscan refugio, se mojan si no, arcoíris final), escasez de comida, mariposa (felicidad+), regalo clickable (monedas/fiesta/diamante); petPet (caricia frotando el dedo, +7 felicidad, dispara reglas de acariciar)
+- WorldCanvas.tsx: caras de persecución 😠/😱, clase pet-hop (saltitos), escondidos con 👀 y zIndex tras el objeto, trepados elevados con ✨, gesto de caricia (pointer stroke >42px), pelota con rebote ball-drop, caja 🎁 clickable, mariposa con vuelo CSS, 26 gotas de lluvia, aviso del evento, banner de modo pelota, cursor-crosshair, canvas-shake
+- PlayHUD.tsx: fila ÓRDENES (🪑 ¡Sentado! / ✋ ¡Quieto! / 👉 ¡Ven! / 🎾 Pelota)
+- HeaderBar.tsx: tienda con 16 artículos (6 adopciones nuevas con descripciones de rivalidad), lista con scroll
+- IntroSplash: desfile de 15 mascotas + nuevas características (SEEN_KEY v3)
+- globals.css: emma-shake, emma-hop (respeta --face), emma-rain, emma-fly, emma-ball-drop, emma-gift
+- page.tsx: window.__emma para depurar
+- Pruebas (5 rondas agent-browser): persecución auto en el demo ✓ (roles chase/flee, 😠/😱, voces de enojo/miedo, shake en DOM), escondite ✓ (hiding + 👀), trepar ✓ (onTopOf), ¡Quieto! ✓ (obey=stay +2🪙), ¡Ven! ✓ (perro llegó al dueño, dist 1), pelota ✓ (lanzada, perro la trajo +3🪙), caricia frotada ✓ (98→100 felicidad), lluvia ✓ (26 gotas + aviso), regalo ✓ (+15🪙), biblioteca 15/15 mascotas + casa 4/4 + naturaleza 5/5, móvil 390px con ÓRDENES y Pelota ✓, cero errores JS, lint limpio
+- Nota técnica: Radix Tabs necesita mousedown (los .click() sintéticos no las cambian); los usuarios reales no lo notan
+
+Stage Summary:
+- Emma Care Studio v0.3 "¡Caos divertido!": 15 mascotas con rivalidades reales (persecuciones con vibración y temblor, gato delante/perro detrás), escondites y trepaderas para escapar, 6 animales nuevos con voz propia, sorpresas aleatorias, cuidado con el dedo (acariciar), pelota con fetch y adiestramiento con premios
+- Capturas en /home/z/my-project/download/: emma3-portada, emma3-persecucion, emma3-escondite, emma3-trepar, emma3-lluvia, emma3-editor, emma3-movil-juego, emma3-final

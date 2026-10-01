@@ -7,9 +7,9 @@ import { useEffect, useState } from 'react'
 import { useStudio } from '@/lib/studio/store'
 import { Button } from '@/components/ui/button'
 
-const SEEN_KEY = 'emma-intro-seen-v2'
+const SEEN_KEY = 'emma-intro-seen-v3'
 
-const PARADE = ['🐶', '🐱', '🐰', '🦊', '🐻', '🐼', '🦁', '🐷', '🐵']
+const PARADE = ['🐶', '🐱', '🐭', '🐰', '🦊', '🐔', '🐻', '🐼', '🦁', '🐷', '🐵', '🦆', '🐦', '🐹', '🐢']
 
 export function IntroSplash() {
   const [show, setShow] = useState(false)
@@ -67,8 +67,10 @@ export function IntroSplash() {
 
         <div className="mt-4 space-y-1.5 rounded-2xl bg-amber-50 p-3 text-sm font-bold text-slate-600">
           <p>🗺️ 4 mundos: 🌳 Jardín · 🏠 Casa · 🏥 Hospital · 🏖️ Playa</p>
-          <p>🔊 Cada animal hace SU sonido: ladra, maúlla, ruge…</p>
-          <p>😊 Caras de ánimo · 🪙 Monedas y tienda · 🧩 Reglas mágicas</p>
+          <p>🔊 Cada animal hace SU sonido: ladra, maúlla, ruge… ¡15 mascotas!</p>
+          <p>😈 ¡Rivalidades! El perro persigue al gato: la pantalla tiembla 📳</p>
+          <p>🌿 Escondites y trepaderas para escapar · 🎾 pelota · 🪑 órdenes</p>
+          <p>🌧️ Sorpresas: lluvia, mariposas y cajas regalo · 👆 acaricia con el dedo</p>
         </div>
 
         <div className="mt-5 flex flex-col gap-2">

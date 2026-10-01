@@ -27,6 +27,8 @@ export default function Home() {
   // cargar proyecto guardado al abrir
   useEffect(() => {
     useStudio.getState().hydrate()
+    // acceso al motor desde la consola (útil para depurar y probar)
+    ;(window as unknown as { __emma?: typeof useStudio }).__emma = useStudio
   }, [])
 
   // bucle de juego: movimiento suave (rAF) + tick de necesidades (1 s)

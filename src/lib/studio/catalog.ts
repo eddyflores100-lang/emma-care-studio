@@ -4,40 +4,50 @@
 import { CatalogItem, LevelDef, LevelId, Mood, Rule, StatKey, WorldObject } from './types'
 
 export const CATALOG: CatalogItem[] = [
-  // 🐾 Mascotas (9)
+  // 🐾 Mascotas (15)
   { id: 'dog', emoji: '🐶', name: 'Perro', kind: 'pet' },
   { id: 'cat', emoji: '🐱', name: 'Gato', kind: 'pet' },
   { id: 'rabbit', emoji: '🐰', name: 'Conejo', kind: 'pet' },
+  { id: 'mouse', emoji: '🐭', name: 'Ratón', kind: 'pet' },
+  { id: 'bird', emoji: '🐦', name: 'Pajarito', kind: 'pet' },
+  { id: 'hamster', emoji: '🐹', name: 'Hámster', kind: 'pet' },
+  { id: 'chicken', emoji: '🐔', name: 'Gallina', kind: 'pet' },
+  { id: 'duck', emoji: '🦆', name: 'Pato', kind: 'pet' },
   { id: 'fox', emoji: '🦊', name: 'Zorro', kind: 'pet' },
   { id: 'bear', emoji: '🐻', name: 'Oso', kind: 'pet' },
   { id: 'panda', emoji: '🐼', name: 'Panda', kind: 'pet' },
   { id: 'lion', emoji: '🦁', name: 'León', kind: 'pet' },
   { id: 'pig', emoji: '🐷', name: 'Cerdito', kind: 'pet' },
   { id: 'monkey', emoji: '🐵', name: 'Monito', kind: 'pet' },
-  // 🏠 Casa (10)
+  { id: 'turtle', emoji: '🐢', name: 'Tortuga', kind: 'pet' },
+  // 🏠 Casa (14)
+  { id: 'house', emoji: '🏠', name: 'Casita', kind: 'home', hide: true, shelter: true },
   { id: 'bed', emoji: '🛏️', name: 'Cama', kind: 'home', special: 'bed' },
   { id: 'bowl', emoji: '🥣', name: 'Comedero', kind: 'home', special: 'food' },
   { id: 'toy', emoji: '🧸', name: 'Juguete', kind: 'home', special: 'toy' },
   { id: 'bath', emoji: '🛁', name: 'Bañera', kind: 'home', special: 'bath' },
-  { id: 'sofa', emoji: '🛋️', name: 'Sofá', kind: 'home' },
+  { id: 'box', emoji: '📦', name: 'Caja', kind: 'home', hide: true },
+  { id: 'sofa', emoji: '🛋️', name: 'Sofá', kind: 'home', climb: true },
+  { id: 'shelf', emoji: '🗄️', name: 'Estantería', kind: 'home', climb: true },
+  { id: 'chair', emoji: '🪑', name: 'Silla', kind: 'home', climb: true },
   { id: 'lamp', emoji: '💡', name: 'Lámpara', kind: 'home' },
   { id: 'tv', emoji: '📺', name: 'Televisión', kind: 'home' },
-  { id: 'chair', emoji: '🪑', name: 'Silla', kind: 'home' },
   { id: 'door', emoji: '🚪', name: 'Puerta', kind: 'home' },
   { id: 'meds', emoji: '💊', name: 'Medicina', kind: 'home' },
-  // 🌳 Naturaleza (13)
-  { id: 'tree', emoji: '🌳', name: 'Árbol', kind: 'nature' },
-  { id: 'pine', emoji: '🌲', name: 'Pino', kind: 'nature' },
+  // 🌳 Naturaleza (15)
+  { id: 'tree', emoji: '🌳', name: 'Árbol', kind: 'nature', climb: true, shelter: true },
+  { id: 'pine', emoji: '🌲', name: 'Pino', kind: 'nature', climb: true, shelter: true },
+  { id: 'palm', emoji: '🌴', name: 'Palmera', kind: 'nature', climb: true, shelter: true },
+  { id: 'bush', emoji: '🌿', name: 'Arbusto', kind: 'nature', hide: true },
+  { id: 'tent', emoji: '⛺', name: 'Tienda', kind: 'nature', hide: true, shelter: true },
+  { id: 'rock', emoji: '🪨', name: 'Piedra', kind: 'nature', hide: true },
   { id: 'flowers', emoji: '🌸', name: 'Flores', kind: 'nature' },
   { id: 'sunflower', emoji: '🌻', name: 'Girasol', kind: 'nature' },
   { id: 'cactus', emoji: '🌵', name: 'Cactus', kind: 'nature' },
-  { id: 'rock', emoji: '🪨', name: 'Piedra', kind: 'nature' },
   { id: 'pond', emoji: '💧', name: 'Estanque', kind: 'nature' },
   { id: 'mushroom', emoji: '🍄', name: 'Honguito', kind: 'nature' },
-  { id: 'bush', emoji: '🌿', name: 'Arbusto', kind: 'nature' },
   { id: 'fountain', emoji: '⛲', name: 'Fuente', kind: 'nature' },
-  { id: 'palm', emoji: '🌴', name: 'Palmera', kind: 'nature' },
-  { id: 'umbrella', emoji: '⛱️', name: 'Sombrilla', kind: 'nature' },
+  { id: 'umbrella', emoji: '⛱️', name: 'Sombrilla', kind: 'nature', shelter: true },
   { id: 'shell', emoji: '🐚', name: 'Concha', kind: 'nature' },
 ]
 
@@ -98,6 +108,28 @@ export const STAT_KEYS = Object.keys(STATS) as StatKey[]
 
 // ===== VOCES: lo que "dice" cada animal según su ánimo (globo + sonido) =====
 
+// ===== RIVALIDADES: quién persigue a quién (¡como en la vida real!) =====
+// El perro persigue al gato, el gato al ratón, el zorro a la gallina...
+
+export const RIVALS: Record<string, string[]> = {
+  dog: ['cat', 'mouse', 'chicken'],
+  cat: ['mouse', 'bird', 'hamster'],
+  fox: ['rabbit', 'mouse', 'chicken', 'duck'],
+  lion: ['monkey'],
+}
+
+/** al revés: de quién huye cada animalito */
+export const FLEE_FROM: Record<string, string[]> = (() => {
+  const m: Record<string, string[]> = {}
+  for (const [pred, preys] of Object.entries(RIVALS)) {
+    for (const p of preys) {
+      if (!m[p]) m[p] = []
+      m[p].push(pred)
+    }
+  }
+  return m
+})()
+
 export const VOICES: Record<string, Record<Mood, string>> = {
   dog: {
     feliz: '¡Guau guau! 🎉',
@@ -105,6 +137,8 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… guau 😴',
     normal: '¡Guau!',
     triste: 'Auuu… 😢',
+    enojado: '¡GRRR! ¡GUAU! 😠',
+    miedo: '¡Auuu! 😱',
   },
   cat: {
     feliz: '¡Miau! 😻',
@@ -112,6 +146,8 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… miau 😴',
     normal: '¡Miau!',
     triste: 'Miauu… 😢',
+    enojado: '¡PSSSS! 😠',
+    miedo: '¡Miaaaau! 😱',
   },
   rabbit: {
     feliz: '¡Pff pff! 🎉',
@@ -119,6 +155,62 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… 😴',
     normal: '¡Prrr!',
     triste: 'Pfff… 😢',
+    enojado: '¡Pfff! 😠',
+    miedo: '¡Piii! 😱',
+  },
+  mouse: {
+    feliz: '¡Pi pi pi! 🎉',
+    hambre: '¡Pi pi! 🧀',
+    sueno: 'Zzz… pi 😴',
+    normal: '¡Pi!',
+    triste: 'Piii… 😢',
+    enojado: '¡PI PI PI! 😠',
+    miedo: '¡PIIIII! 😱',
+  },
+  bird: {
+    feliz: '¡Pío pío! 🎉',
+    hambre: '¡Pío pío! 🐛',
+    sueno: 'Zzz… pío 😴',
+    normal: '¡Pío!',
+    triste: 'Pío… 😢',
+    enojado: '¡PÍO PÍO! 😠',
+    miedo: '¡AAAAH! 😱',
+  },
+  hamster: {
+    feliz: '¡Pi pi! 🎉',
+    hambre: '¡Pi! 🌰',
+    sueno: 'Zzz… 😴',
+    normal: '¡Piii!',
+    triste: 'Pii… 😢',
+    enojado: '¡PI PI! 😠',
+    miedo: '¡PIII! 😱',
+  },
+  chicken: {
+    feliz: '¡Coc coc! 🎉',
+    hambre: '¡Coc! 🌽',
+    sueno: 'Zzz… coc 😴',
+    normal: '¡Coc coc!',
+    triste: 'Bwok… 😢',
+    enojado: '¡CO CO COC! 😠',
+    miedo: '¡COCOOOO! 😱',
+  },
+  duck: {
+    feliz: '¡Cuac cuac! 🎉',
+    hambre: '¡Cuac! 🍞',
+    sueno: 'Zzz… cuac 😴',
+    normal: '¡Cuac!',
+    triste: 'Cuaac… 😢',
+    enojado: '¡CUAC CUAC! 😠',
+    miedo: '¡CUAAAAC! 😱',
+  },
+  turtle: {
+    feliz: '¡Plop plop! 🎉',
+    hambre: '¡Plop! 🥬',
+    sueno: 'Zzz… 😴',
+    normal: '¡Plop!',
+    triste: 'Plooop… 😢',
+    enojado: '¡PLOP! 😠',
+    miedo: '¡Me escondo! 😱',
   },
   fox: {
     feliz: '¡Yip yip! 🎉',
@@ -126,6 +218,8 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… yip 😴',
     normal: '¡Yip!',
     triste: 'Auuu… 😢',
+    enojado: '¡GRRR YIP! 😠',
+    miedo: '¡Yiiip! 😱',
   },
   bear: {
     feliz: '¡Rawr rawr! 🎉',
@@ -133,6 +227,8 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… grrr 😴',
     normal: '¡Grrr!',
     triste: 'Grrr… 😢',
+    enojado: '¡GRRRRR! 😠',
+    miedo: '¡Ooooh! 😱',
   },
   panda: {
     feliz: '¡Brrr brrr! 🎉',
@@ -140,6 +236,8 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… 😴',
     normal: '¡Brrr!',
     triste: 'Brrr… 😢',
+    enojado: '¡BRRR! 😠',
+    miedo: '¡Biii! 😱',
   },
   lion: {
     feliz: '¡Roar! 🎉',
@@ -147,6 +245,8 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… roar 😴',
     normal: '¡Roar!',
     triste: 'Roooar… 😢',
+    enojado: '¡ROOOAR! 😠',
+    miedo: '¡Roar? 😱',
   },
   pig: {
     feliz: '¡Oink oink! 🎉',
@@ -154,6 +254,8 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… oink 😴',
     normal: '¡Oink!',
     triste: 'Oiiiink… 😢',
+    enojado: '¡OINK OINK! 😠',
+    miedo: '¡Chiiii! 😱',
   },
   monkey: {
     feliz: '¡Uja uja! 🎉',
@@ -161,6 +263,8 @@ export const VOICES: Record<string, Record<Mood, string>> = {
     sueno: 'Zzz… uja 😴',
     normal: '¡Uja uja!',
     triste: 'Uaa… 😢',
+    enojado: '¡JA JA JA! 😠',
+    miedo: '¡Uiiii! 😱',
   },
 }
 
@@ -169,6 +273,12 @@ export const PET_NAMES: Record<string, string[]> = {
   dog: ['Max', 'Luna', 'Rocky', 'Toby'],
   cat: ['Misi', 'Mia', 'Pelusa', 'Simba'],
   rabbit: ['Copito', 'Nube', 'Canela', 'Bola'],
+  mouse: ['Pinky', 'Quesito', 'Miguela', 'Bolita'],
+  bird: ['Pío', 'Kiwi', 'Cielo', 'Piolín'],
+  hamster: ['Nugget', 'Bombón', 'Galleta', 'Peluche'],
+  chicken: ['Clara', 'Cocó', 'Pluma', 'Graciela'],
+  duck: ['Patricio', 'Cuca', 'Lago', 'Nata'],
+  turtle: ['Tortu', 'Lenta', 'Concha', 'Flash'],
   fox: ['Canela', 'Zorrita', 'Naranja', 'Rustie'],
   bear: ['Osito', 'Miel', 'Bodoque', 'Peluche'],
   panda: ['Bambú', 'Pandi', 'Momo', 'Nube'],
@@ -199,20 +309,23 @@ function mk(
 /** Proyecto de bienvenida: un pequeño mundo de ejemplo con reglas demo */
 export function makeDemoProject(): { objects: WorldObject[]; rules: Rule[] } {
   const objects = [
-    mk('house', 'Casa', 12, 26, 2.3),
-    mk('tree', 'Árbol', 71, 62, 1.9),
+    mk('house', 'Casita', 12, 26, 2.3),
+    mk('tree', 'Árbol', 71, 30, 1.9),
     mk('flowers', 'Flores', 30, 40, 1, 300),
-    mk('pond', 'Estanque', 58, 84, 1.4, 180),
+    mk('pond', 'Estanque', 58, 88, 1.4, 180),
     mk('mushroom', 'Honguito', 44, 30, 0.9, 0),
     mk('sunflower', 'Girasol', 88, 55, 1, 0),
+    mk('bush', 'Arbusto', 82, 76, 1.2),
+    mk('box', 'Caja', 6, 58, 1.1),
     mk('bowl', 'Comedero', 38, 72),
     mk('bed', 'Cama', 16, 76, 1.1),
     mk('toy', 'Juguete', 52, 48),
     mk('dog', 'Max', 47, 56, 1.3, 0, 8),
-    mk('cat', 'Misi', 63, 60, 1.2, 0, 9),
+    mk('cat', 'Misi', 60, 62, 1.2, 0, 9),
+    mk('mouse', 'Pinky', 72, 70, 0.9, 0, 11),
   ]
-  const toy = objects[8]
-  const dog = objects[9]
+  const toy = objects[10]
+  const dog = objects[11]
   const rules: Rule[] = [
     {
       id: uid(),
@@ -241,7 +354,8 @@ export function makeDemoProject(): { objects: WorldObject[]; rules: Rule[] } {
 /** Mundo nuevo (vacío pero con lo esencial para empezar) */
 export function makeBlankProject(): { objects: WorldObject[]; rules: Rule[] } {
   const objects = [
-    mk('house', 'Casa', 14, 28, 2.2),
+    mk('house', 'Casita', 14, 28, 2.2),
+    mk('bush', 'Arbusto', 80, 74, 1.2),
     mk('bowl', 'Comedero', 40, 72),
     mk('bed', 'Cama', 20, 78, 1.1),
     mk('dog', 'Max', 50, 55, 1.3, 0, 8),
@@ -260,6 +374,8 @@ export function makeLevelStarters(level: LevelId): WorldObject[] {
         mk('bowl', 'Comedero', 45, 78, 1, 0, undefined, 'casa'),
         mk('bed', 'Camita', 15, 80, 1.1, 0, undefined, 'casa'),
         mk('sofa', 'Sofá', 28, 42, 1.8, 0, undefined, 'casa'),
+        mk('shelf', 'Estantería', 60, 30, 1.4, 0, undefined, 'casa'),
+        mk('box', 'Caja', 78, 76, 1.1, 0, undefined, 'casa'),
         mk('lamp', 'Lámpara', 75, 28, 1.1, 0, undefined, 'casa'),
         mk('tv', 'Televisión', 88, 34, 1.3, 0, undefined, 'casa'),
         mk('door', 'Puerta', 6, 30, 1.2, 0, undefined, 'casa'),
@@ -278,6 +394,7 @@ export function makeLevelStarters(level: LevelId): WorldObject[] {
         mk('bed', 'Toalla cama', 22, 80, 1.1, 0, undefined, 'playa'),
         mk('palm', 'Palmera', 12, 32, 1.7, 0, undefined, 'playa'),
         mk('umbrella', 'Sombrilla', 85, 45, 1.5, 0, undefined, 'playa'),
+        mk('tent', 'Tienda', 55, 30, 1.3, 0, undefined, 'playa'),
         mk('shell', 'Concha', 70, 82, 0.8, 0, undefined, 'playa'),
       ]
     case 'jardin':

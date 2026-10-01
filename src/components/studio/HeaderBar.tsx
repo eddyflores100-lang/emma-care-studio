@@ -33,11 +33,17 @@ function ShopDialog() {
   const items: { id: ShopItemId; emoji: string; name: string; desc: string; price: number }[] = [
     { id: 'cake', emoji: '🎂', name: 'Pastel', desc: 'Felicidad +25 a la mascota elegida', price: 15 },
     { id: 'toy', emoji: '🧸', name: 'Juguete', desc: 'Aparecerá en el mundo actual', price: 30 },
-    { id: 'cat', emoji: '🐱', name: 'Adoptar gato', desc: 'Maúlla cuando tiene hambre', price: 40 },
+    { id: 'mouse', emoji: '🐭', name: 'Adoptar ratón', desc: '¡Pi pi pi! … pero el gato lo persigue', price: 20 },
+    { id: 'bird', emoji: '🐦', name: 'Adoptar pajarito', desc: 'Trina feliz… y huye de los gatos', price: 30 },
+    { id: 'cat', emoji: '🐱', name: 'Adoptar gato', desc: 'Maúlla y caza ratones (¡y huye del perro!)', price: 40 },
+    { id: 'chicken', emoji: '🐔', name: 'Adoptar gallina', desc: 'Cacarea de pánico si la persiguen', price: 45 },
+    { id: 'hamster', emoji: '🐹', name: 'Adoptar hámster', desc: 'Pequeño, dulce y muy asustadizo', price: 55 },
     { id: 'rabbit', emoji: '🐰', name: 'Adoptar conejo', desc: 'Un amigo saltarín y ruidoso', price: 60 },
-    { id: 'fox', emoji: '🦊', name: 'Adoptar zorro', desc: 'Hace ¡yip yip! de alegría', price: 80 },
+    { id: 'duck', emoji: '🦆', name: 'Adoptar pato', desc: '¡Cuac cuac! sin parar (y con miedo)', price: 70 },
+    { id: 'fox', emoji: '🦊', name: 'Adoptar zorro', desc: 'Hace ¡yip yip! y trae la pelota', price: 80 },
     { id: 'pig', emoji: '🐷', name: 'Adoptar cerdito', desc: 'Nunca para de hacer ¡oink!', price: 90 },
     { id: 'monkey', emoji: '🐵', name: 'Adoptar monito', desc: 'Parlotea sin parar: ¡uja uja!', price: 100 },
+    { id: 'turtle', emoji: '🐢', name: 'Adoptar tortuga', desc: 'Lenta y tranquila: se esconde en su caparazón', price: 110 },
     { id: 'panda', emoji: '🐼', name: 'Adoptar panda', desc: 'Balbucea dulcemente: ¡brrr!', price: 120 },
     { id: 'bear', emoji: '🐻', name: 'Adoptar oso', desc: 'Gruñe fuerte y ronca al dormir', price: 140 },
     { id: 'lion', emoji: '🦁', name: 'Adoptar león', desc: 'Su rugido se oye en todo el mundo', price: 180 },
@@ -57,7 +63,7 @@ function ShopDialog() {
             Gana monedas cuidando a tus mascotas y cómpralas aquí
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
+        <div className="thin-scroll max-h-[50vh] space-y-2 overflow-y-auto">
           {items.map((it) => (
             <div
               key={it.id}

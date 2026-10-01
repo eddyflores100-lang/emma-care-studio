@@ -1,0 +1,861 @@
+     1→     1→// Emma Care Studio — store principal (zustand)
+     2→     2→// Incluye: estado del editor, mundos/niveles con desbloqueo, reglas mágicas,
+     3→     3→// motor de juego (IA de mascotas, necesidades, monedas, partículas, VOCES)
+     4→     4→// y persistencia en localStorage.
+     5→     5→
+     6→     6→import { create } from 'zustand'
+     7→     7→import { toast } from 'sonner'
+     8→     8→import {
+     9→     9→  LevelId,
+    10→    10→  Mood,
+    11→    11→  Particle,
+    12→    12→  PetRuntime,
+    13→    13→  PlayerAction,
+    14→    14→  Rule,
+    15→    15→  SavedProject,
+    16→    16→  ShopItemId,
+    17→    17→  SpecialKind,
+    18→    18→  WorldObject,
+    19→    19→} from './types'
+    20→    20→import {
+    21→    21→  LEVELS,
+    22→    22→  PET_NAMES,
+    23→    23→  STATS,
+    24→    24→  VOICES,
+    25→    25→  catalogById,
+    26→    26→  makeBlankProject,
+    27→    27→  makeDemoProject,
+    28→    28→  makeLevelStarters,
+    29→    29→  uid,
+    30→    30→} from './catalog'
+    31→    31→import { petVoice, setMuted, sfx } from './sound'
+    32→    32→
+    33→    33→const SAVE_KEY = 'emma-care-studio-v1'
+    34→    34→
+    35→    35→const clamp = (v: number) => Math.max(0, Math.min(100, v))
+    36→    36→const clampPct = (v: number) => Math.max(3, Math.min(97, v))
+    37→    37→const rand = (a: number, b: number) => a + Math.random() * (b - a)
+    38→    38→
+    39→    39→const isPetObj = (o: WorldObject) => catalogById[o.catalogId]?.kind === 'pet'
+    40→    40→
+    41→    41→function findSpecial(objects: WorldObject[], special: SpecialKind) {
+    42→    42→  return objects.find((o) => catalogById[o.catalogId]?.special === special)
+    43→    43→}
+    44→    44→
+    45→    45→function makeRuntime(): PetRuntime {
+    46→    46→  return {
+    47→    47→    stats: {
+    48→    48→      felicidad: Math.round(rand(70, 85)),
+    49→    49→      comida: Math.round(rand(55, 75)),
+    50→    50→      energia: Math.round(rand(60, 85)),
+    51→    51→      higiene: Math.round(rand(70, 90)),
+    52→    52→      descanso: Math.round(rand(65, 85)),
+    53→    53→    },
+    54→    54→    state: 'idle',
+    55→    55→    tx: 50,
+    56→    56→    ty: 50,
+    57→    57→    targetKind: 'random',
+    58→    58→    wanderAt: 0,
+    59→    59→    eatUntil: 0,
+    60→    60→    facing: 1,
+    61→    61→    sick: false,
+    62→    62→    toyAt: 0,
+    63→    63→    voiceAt: 0,
+    64→    64→    pairCd: {},
+    65→    65→  }
+    66→    66→}
+    67→    67→
+    68→    68→/** Ánimo actual de una mascota: decide su voz y su cara */
+    69→    69→function moodOf(rt: PetRuntime): Mood {
+    70→    70→  if (rt.sick) return 'triste'
+    71→    71→  if (rt.stats.comida < 30) return 'hambre'
+    72→    72→  if (rt.stats.descanso < 30) return 'sueno'
+    73→    73→  if (rt.stats.felicidad < 25) return 'triste'
+    74→    74→  if (rt.stats.felicidad >= 85) return 'feliz'
+    75→    75→  return 'normal'
+    76→    76→}
+    77→    77→
+    78→    78→export type MobileTab = 'objetos' | 'ajustes' | 'reglas'
+    79→    79→
+    80→    80→interface StudioState {
+    81→    81→  hydrated: boolean
+    82→    82→  mode: 'edit' | 'play'
+    83→    83→  objects: WorldObject[]
+    84→    84→  rules: Rule[]
+    85→    85→  selectedId: string | null
+    86→    86→  /** pestaña activa del editor en móvil (pantallas < lg) */
+    87→    87→  mobileTab: MobileTab
+    88→    88→  coins: number
+    89→    89→  muted: boolean
+    90→    90→  /** mundo actual y mundos desbloqueados */
+    91→    91→  currentLevel: LevelId
+    92→    92→  unlockedLevels: LevelId[]
+    93→    93→  /** runtime de mascotas (solo modo juego) */
+    94→    94→  pets: Record<string, PetRuntime>
+    95→    95→  particles: Particle[]
+    96→    96→  /** globos de voz activos por mascota (¡Guau!, ¡Miau...) */
+    97→    97→  say: Record<string, SayBubbleText>
+    98→    98→  ruleAcc: Record<string, number>
+    99→    99→  actionCd: Record<string, number>
+   100→   100→  lastBonusAt: number
+   101→   101→
+   102→   102→  hydrate: () => void
+   103→   103→  addObject: (catalogId: string, x?: number, y?: number) => void
+   104→   104→  updateObject: (id: string, patch: Partial<WorldObject>) => void
+   105→   105→  removeObject: (id: string) => void
+   106→   106→  select: (id: string | null) => void
+   107→   107→  /** selecciona y (en móvil) salta a la pestaña de ajustes */
+   108→   108→  selectForEdit: (id: string) => void
+   109→   109→  setMobileTab: (tab: MobileTab) => void
+   110→   110→  /** viaja a un mundo; si está cerrado, intenta desbloquearlo con monedas */
+   111→   111→  setLevel: (id: LevelId) => void
+   112→   112→  startPlay: () => void
+   113→   113→  stopPlay: () => void
+   114→   114→  addRule: () => void
+   115→   115→  updateRule: (id: string, patch: Partial<Rule>) => void
+   116→   116→  removeRule: (id: string) => void
+   117→   117→  saveProject: () => void
+   118→   118→  exportProject: () => void
+   119→   119→  newProject: () => void
+   120→   120→  toggleMute: () => void
+   121→   121→  buyShopItem: (itemId: ShopItemId) => void
+   122→   122→  playerAction: (action: PlayerAction) => void
+   123→   123→  moveTick: (dtMs: number) => void
+   124→   124→  gameTick: () => void
+   125→   125→  spawnParticles: (emoji: string, x: number, y: number, n?: number) => void
+   126→   126→}
+   127→   127→
+   128→   128→/** texto del globo de voz */
+   129→   129→type SayBubbleText = { text: string; until: number }
+   130→   130→
+   131→   131→type StoreSet = (partial: Partial<StudioState>) => void
+   132→   132→type StoreGet = () => StudioState
+   133→   133→
+   134→   134→/** Aplica el efecto de una regla a una mascota (con partícula y sonido) */
+   135→   135→function fireRule(set: StoreSet, get: StoreGet, rule: Rule, pet: WorldObject) {
+   136→   136→  const s = get()
+   137→   137→  const rt0 = s.pets[pet.id]
+   138→   138→  if (!rt0) return
+   139→   139→  const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats } }
+   140→   140→  const delta = rule.effect === 'aumentar' ? rule.amount : -rule.amount
+   141→   141→  rt.stats[rule.stat] = clamp(rt.stats[rule.stat] + delta)
+   142→   142→  set({ pets: { ...get().pets, [pet.id]: rt } })
+   143→   143→  get().spawnParticles(delta > 0 ? STATS[rule.stat].emoji : '💨', pet.x, pet.y - 3, 1)
+   144→   144→  sfx.pop()
+   145→   145→}
+   146→   146→
+   147→   147→/** Haz que una mascota "hable": sonido de su especie + globo con la onomatopeya */
+   148→   148→function speak(set: StoreSet, get: StoreGet, pet: WorldObject, mood: Mood) {
+   149→   149→  petVoice(pet.catalogId, mood)
+   150→   150→  const text = VOICES[pet.catalogId]?.[mood]
+   151→   151→  if (!text) return
+   152→   152→  set({ say: { ...get().say, [pet.id]: { text, until: Date.now() + 2400 } } })
+   153→   153→}
+   154→   154→
+   155→   155→export const useStudio = create<StudioState>((set, get) => {
+   156→   156→  // Mundo de bienvenida (se reemplaza por el proyecto guardado al hidratar)
+   157→   157→  const demo = makeDemoProject()
+   158→   158→
+   159→   159→  return {
+   160→   160→    hydrated: false,
+   161→   161→    mode: 'edit',
+   162→   162→    objects: demo.objects,
+   163→   163→    rules: demo.rules,
+   164→   164→    selectedId: null,
+   165→   165→    mobileTab: 'objetos',
+   166→   166→    coins: 0,
+   167→   167→    muted: false,
+   168→   168→    currentLevel: 'jardin',
+   169→   169→    unlockedLevels: ['jardin'],
+   170→   170→    pets: {},
+   171→   171→    particles: [],
+   172→   172→    say: {},
+   173→   173→    ruleAcc: {},
+   174→   174→    actionCd: {},
+   175→   175→    lastBonusAt: 0,
+   176→   176→
+   177→   177→    hydrate: () => {
+   178→   178→      if (get().hydrated) return
+   179→   179→      let next: Partial<StudioState> = {}
+   180→   180→      try {
+   181→   181→        const raw = typeof window !== 'undefined' ? localStorage.getItem(SAVE_KEY) : null
+   182→   182→        if (raw) {
+   183→   183→          const data = JSON.parse(raw) as SavedProject
+   184→   184→          const valid = data && Array.isArray(data.objects)
+   185→   185→          if (valid) {
+   186→   186→            // migración v1 → v2: los objetos sin mundo van al jardín
+   187→   187→            const objects = data.objects
+   188→   188→              .filter((o) => catalogById[o.catalogId])
+   189→   189→              .map((o) => ({ ...o, level: o.level ?? 'jardin' }))
+   190→   190→            const unlocked = (data.unlockedLevels ?? ['jardin']).filter((id) =>
+   191→   191→              LEVELS.some((l) => l.id === id),
+   192→   192→            )
+   193→   193→            next = {
+   194→   194→              objects,
+   195→   195→              rules: Array.isArray(data.rules) ? data.rules : [],
+   196→   196→              coins: typeof data.coins === 'number' ? data.coins : 0,
+   197→   197→              unlockedLevels: unlocked.length ? unlocked : ['jardin'],
+   198→   198→              currentLevel:
+   199→   199→                data.currentLevel && unlocked.includes(data.currentLevel)
+   200→   200→                  ? data.currentLevel
+   201→   201→                  : 'jardin',
+   202→   202→            }
+   203→   203→          }
+   204→   204→        } else {
+   205→   205→          setTimeout(() => {
+   206→   206→            toast('👋 ¡Hola! Añade objetos, crea reglas mágicas y pulsa ▶️ ¡JUGAR!', {
+   207→   207→              duration: 6000,
+   208→   208→            })
+   209→   209→          }, 700)
+   210→   210→        }
+   211→   211→      } catch {
+   212→   212→        // datos corruptos: se ignora y se usa el demo
+   213→   213→      }
+   214→   214→      setMuted(get().muted)
+   215→   215→      set({ ...next, hydrated: true })
+   216→   216→    },
+   217→   217→
+   218→   218→    addObject: (catalogId, x, y) => {
+   219→   219→      const item = catalogById[catalogId]
+   220→   220→      if (!item) return
+   221→   221→      const s = get()
+   222→   222→      const sameCount = s.objects.filter((o) => o.catalogId === catalogId).length
+   223→   223→      let name = item.name
+   224→   224→      if (item.kind === 'pet') {
+   225→   225→        const names = PET_NAMES[catalogId] ?? [item.name]
+   226→   226→        name = names[sameCount % names.length]
+   227→   227→      } else if (sameCount > 0) {
+   228→   228→        name = `${item.name} ${sameCount + 1}`
+   229→   229→      }
+   230→   230→      const obj: WorldObject = {
+   231→   231→        id: uid(),
+   232→   232→        catalogId,
+   233→   233→        name,
+   234→   234→        x: clampPct(x ?? rand(30, 70)),
+   235→   235→        y: clampPct(y ?? rand(30, 70)),
+   236→   236→        size: item.kind === 'pet' ? 1.3 : item.kind === 'home' ? 1.4 : 1.1,
+   237→   237→        hue: 0,
+   238→   238→        speed: item.kind === 'pet' ? 8 : undefined,
+   239→   239→        level: s.currentLevel,
+   240→   240→      }
+   241→   241→      if (s.mode === 'play' && item.kind === 'pet') {
+   242→   242→        const rt = makeRuntime()
+   243→   243→        rt.voiceAt = Date.now() + rand(1200, 4000)
+   244→   244→        set({ objects: [...s.objects, obj], pets: { ...s.pets, [obj.id]: rt } })
+   245→   245→      } else {
+   246→   246→        set({
+   247→   247→          objects: [...s.objects, obj],
+   248→   248→          selectedId: s.mode === 'edit' ? obj.id : s.selectedId,
+   249→   249→        })
+   250→   250→      }
+   251→   251→      sfx.pop()
+   252→   252→      toast(`${item.emoji} ¡${name} se unió al mundo!`)
+   253→   253→      if (item.kind === 'pet') {
+   254→   254→        // la mascota recién llegada saluda con su voz
+   255→   255→        speak(set, get, obj, 'feliz')
+   256→   256→      }
+   257→   257→    },
+   258→   258→
+   259→   259→    updateObject: (id, patch) => {
+   260→   260→      set({ objects: get().objects.map((o) => (o.id === id ? { ...o, ...patch } : o)) })
+   261→   261→    },
+   262→   262→
+   263→   263→    removeObject: (id) => {
+   264→   264→      const s = get()
+   265→   265→      const obj = s.objects.find((o) => o.id === id)
+   266→   266→      set({
+   267→   267→        objects: s.objects.filter((o) => o.id !== id),
+   268→   268→        selectedId: s.selectedId === id ? null : s.selectedId,
+   269→   269→        pets:
+   270→   270→          obj && isPetObj(obj)
+   271→   271→            ? Object.fromEntries(Object.entries(s.pets).filter(([k]) => k !== id))
+   272→   272→            : s.pets,
+   273→   273→      })
+   274→   274→      sfx.click()
+   275→   275→    },
+   276→   276→
+   277→   277→    select: (id) => set({ selectedId: id }),
+   278→   278→
+   279→   279→    selectForEdit: (id) => set({ selectedId: id, mobileTab: 'ajustes' }),
+   280→   280→
+   281→   281→    setMobileTab: (tab) => set({ mobileTab: tab }),
+   282→   282→
+   283→   283→    setLevel: (id) => {
+   284→   284→      const s = get()
+   285→   285→      const def = LEVELS.find((l) => l.id === id)
+   286→   286→      if (!def) return
+   287→   287→      if (s.unlockedLevels.includes(id)) {
+   288→   288→        if (s.currentLevel === id) return
+   289→   289→        set({ currentLevel: id, selectedId: null, say: {} })
+   290→   290→        sfx.pop()
+   291→   291→        toast(`${def.emoji} ¡Bienvenido/a a ${def.name}!`)
+   292→   292→        return
+   293→   293→      }
+   294→   294→      if (s.coins < def.cost) {
+   295→   295→        toast(`🔒 Te faltan ${def.cost - s.coins} 🪙 para abrir ${def.name}. ¡Cuida mascotas!`)
+   296→   296→        sfx.sad()
+   297→   297→        return
+   298→   298→      }
+   299→   299→      const starters = makeLevelStarters(id)
+   300→   300→      set({
+   301→   301→        coins: s.coins - def.cost,
+   302→   302→        unlockedLevels: [...s.unlockedLevels, id],
+   303→   303→        currentLevel: id,
+   304→   304→        objects: [...s.objects, ...starters],
+   305→   305→        selectedId: null,
+   306→   306→        say: {},
+   307→   307→      })
+   308→   308→      sfx.unlock()
+   309→   309→      get().spawnParticles('🎉', 50, 28, 2)
+   310→   310→      get().spawnParticles('✨', 38, 45, 2)
+   311→   311→      get().spawnParticles('⭐', 62, 45, 2)
+   312→   312→      toast(`🎉 ¡Nuevo mundo desbloqueado: ${def.emoji} ${def.name}!`, { duration: 5000 })
+   313→   313→    },
+   314→   314→
+   315→   315→    startPlay: () => {
+   316→   316→      const s = get()
+   317→   317→      const now = Date.now()
+   318→   318→      const pets: Record<string, PetRuntime> = {}
+   319→   319→      for (const o of s.objects) {
+   320→   320→        if (isPetObj(o)) {
+   321→   321→          const rt = makeRuntime()
+   322→   322→          // cada mascota empieza a "hablar" en un momento distinto
+   323→   323→          rt.voiceAt = now + rand(1200, 6000)
+   324→   324→          pets[o.id] = rt
+   325→   325→        }
+   326→   326→      }
+   327→   327→      set({
+   328→   328→        mode: 'play',
+   329→   329→        pets,
+   330→   330→        particles: [],
+   331→   331→        say: {},
+   332→   332→        ruleAcc: {},
+   333→   333→        actionCd: {},
+   334→   334→        lastBonusAt: now,
+   335→   335→        selectedId: null,
+   336→   336→      })
+   337→   337→      sfx.happy()
+   338→   338→      const petCount = Object.keys(pets).length
+   339→   339→      setTimeout(() => {
+   340→   340→        toast(
+   341→   341→          petCount
+   342→   342→            ? '▶️ ¡A jugar! Toca una mascota para cuidarla 🐾'
+   343→   343→            : '🏡 No hay mascotas: vuelve a ✏️ Editar y añade una',
+   344→   344→          { duration: 4500 },
+   345→   345→        )
+   346→   346→      }, 350)
+   347→   347→    },
+   348→   348→
+   349→   349→    stopPlay: () => set({ mode: 'edit', pets: {}, particles: [], say: {}, selectedId: null }),
+   350→   350→
+   351→   351→    addRule: () => {
+   352→   352→      const s = get()
+   353→   353→      const firstPet = s.objects.find(isPetObj)
+   354→   354→      const firstTarget = s.objects.find((o) => !isPetObj(o))
+   355→   355→      const rule: Rule = {
+   356→   356→        id: uid(),
+   357→   357→        trigger: 'cerca',
+   358→   358→        petId: firstPet?.id ?? 'cualquiera',
+   359→   359→        targetId: firstTarget?.id ?? 'cualquiera',
+   360→   360→        intervalSec: 20,
+   361→   361→        effect: 'aumentar',
+   362→   362→        stat: 'felicidad',
+   363→   363→        amount: 10,
+   364→   364→      }
+   365→   365→      set({ rules: [...s.rules, rule] })
+   366→   366→      sfx.magic()
+   367→   367→    },
+   368→   368→
+   369→   369→    updateRule: (id, patch) =>
+   370→   370→      set({ rules: get().rules.map((r) => (r.id === id ? { ...r, ...patch } : r)) }),
+   371→   371→
+   372→   372→    removeRule: (id) => {
+   373→   373→      set({ rules: get().rules.filter((r) => r.id !== id) })
+   374→   374→      sfx.click()
+   375→   375→    },
+   376→   376→
+   377→   377→    saveProject: () => {
+   378→   378→      const s = get()
+   379→   379→      const data: SavedProject = {
+   380→   380→        version: 2,
+   381→   381→        objects: s.objects,
+   382→   382→        rules: s.rules,
+   383→   383→        coins: s.coins,
+   384→   384→        savedAt: new Date().toISOString(),
+   385→   385→        unlockedLevels: s.unlockedLevels,
+   386→   386→        currentLevel: s.currentLevel,
+   387→   387→      }
+   388→   388→      try {
+   389→   389→        localStorage.setItem(SAVE_KEY, JSON.stringify(data))
+   390→   390→        toast('💾 ¡Proyecto guardado!')
+   391→   391→        sfx.magic()
+   392→   392→      } catch {
+   393→   393→        toast('😅 No se pudo guardar el proyecto')
+   394→   394→      }
+   395→   395→    },
+   396→   396→
+   397→   397→    exportProject: () => {
+   398→   398→      const s = get()
+   399→   399→      const data: SavedProject = {
+   400→   400→        version: 2,
+   401→   401→        objects: s.objects,
+   402→   402→        rules: s.rules,
+   403→   403→        coins: s.coins,
+   404→   404→        savedAt: new Date().toISOString(),
+   405→   405→        unlockedLevels: s.unlockedLevels,
+   406→   406→        currentLevel: s.currentLevel,
+   407→   407→      }
+   408→   408→      try {
+   409→   409→        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+   410→   410→        const url = URL.createObjectURL(blob)
+   411→   411→        const a = document.createElement('a')
+   412→   412→        a.href = url
+   413→   413→        a.download = 'emma-care-proyecto.json'
+   414→   414→        a.click()
+   415→   415→        URL.revokeObjectURL(url)
+   416→   416→        toast('⬇️ ¡Proyecto descargado en JSON!')
+   417→   417→      } catch {
+   418→   418→        toast('😅 No se pudo descargar')
+   419→   419→      }
+   420→   420→    },
+   421→   421→
+   422→   422→    newProject: () => {
+   423→   423→      const blank = makeBlankProject()
+   424→   424→      set({
+   425→   425→        objects: blank.objects,
+   426→   426→        rules: blank.rules,
+   427→   427→        coins: 0,
+   428→   428→        selectedId: null,
+   429→   429→        pets: {},
+   430→   430→        particles: [],
+   431→   431→        say: {},
+   432→   432→        mode: 'edit',
+   433→   433→        currentLevel: 'jardin',
+   434→   434→        unlockedLevels: ['jardin'],
+   435→   435→      })
+   436→   436→      toast('🆕 ¡Mundo nuevo! Construye tu juego ✨')
+   437→   437→      sfx.magic()
+   438→   438→    },
+   439→   439→
+   440→   440→    toggleMute: () => {
+   441→   441→      const next = !get().muted
+   442→   442→      setMuted(next)
+   443→   443→      set({ muted: next })
+   444→   444→      if (!next) sfx.click()
+   445→   445→    },
+   446→   446→
+   447→   447→    buyShopItem: (itemId) => {
+   448→   448→      const s = get()
+   449→   449→      const prices: Record<ShopItemId, number> = {
+   450→   450→        cake: 15,
+   451→   451→        toy: 30,
+   452→   452→        cat: 40,
+   453→   453→        rabbit: 60,
+   454→   454→        fox: 80,
+   455→   455→        pig: 90,
+   456→   456→        monkey: 100,
+   457→   457→        panda: 120,
+   458→   458→        bear: 140,
+   459→   459→        lion: 180,
+   460→   460→      }
+   461→   461→      const price = prices[itemId]
+   462→   462→      if (s.coins < price) {
+   463→   463→        toast(`🪙 Te faltan ${price - s.coins} monedas. ¡Cuida a tus mascotas!`)
+   464→   464→        sfx.sad()
+   465→   465→        return
+   466→   466→      }
+   467→   467→      if (itemId === 'cake') {
+   468→   468→        const sel = s.objects.find((o) => o.id === s.selectedId && isPetObj(o))
+   469→   469→        if (!sel) {
+   470→   470→          toast('👆 Primero toca una mascota y luego compra el pastel')
+   471→   471→          return
+   472→   472→        }
+   473→   473→        const rt0 = s.pets[sel.id]
+   474→   474→        if (!rt0) return
+   475→   475→        const rt: PetRuntime = {
+   476→   476→          ...rt0,
+   477→   477→          stats: { ...rt0.stats, felicidad: clamp(rt0.stats.felicidad + 25) },
+   478→   478→        }
+   479→   479→        set({ coins: s.coins - price, pets: { ...s.pets, [sel.id]: rt } })
+   480→   480→        get().spawnParticles('🎂', sel.x, sel.y - 3, 3)
+   481→   481→        speak(set, get, sel, 'feliz')
+   482→   482→      } else if (itemId === 'toy') {
+   483→   483→        const obj: WorldObject = {
+   484→   484→          id: uid(),
+   485→   485→          catalogId: 'toy',
+   486→   486→          name: 'Juguete',
+   487→   487→          x: rand(25, 75),
+   488→   488→          y: rand(40, 75),
+   489→   489→          size: 1,
+   490→   490→          hue: Math.floor(rand(0, 6)) * 60,
+   491→   491→          speed: undefined,
+   492→   492→          level: s.currentLevel,
+   493→   493→        }
+   494→   494→        set({ coins: s.coins - price, objects: [...s.objects, obj] })
+   495→   495→      } else {
+   496→   496→        // adoptar mascota nueva
+   497→   497→        get().addObject(itemId, rand(35, 65), rand(50, 70))
+   498→   498→        set({ coins: get().coins - price })
+   499→   499→      }
+   500→   500→      sfx.coin()
+   501→   501→      if (itemId !== 'cake') toast(`✨ ¡Compra feliz! −${price} 🪙`)
+   502→   502→    },
+   503→   503→
+   504→   504→    playerAction: (action) => {
+   505→   505→      const s = get()
+   506→   506→      if (s.mode !== 'play') return
+   507→   507→      const pet = s.objects.find((o) => o.id === s.selectedId && isPetObj(o))
+   508→   508→      if (!pet) {
+   509→   509→        toast('👆 Primero toca una mascota')
+   510→   510→        return
+   511→   511→      }
+   512→   512→      const rt0 = s.pets[pet.id]
+   513→   513→      if (!rt0) return
+   514→   514→      const now = Date.now()
+   515→   515→      const cdKey = `${pet.id}:${action}`
+   516→   516→      if (now - (s.actionCd[cdKey] ?? 0) < 3500) {
+   517→   517→        toast('⏳ ¡Un poquito de espera!')
+   518→   518→        return
+   519→   519→      }
+   520→   520→      const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
+   521→   521→      let coins = s.coins
+   522→   522→      const actionCd = { ...s.actionCd, [cdKey]: now }
+   523→   523→
+   524→   524→      switch (action) {
+   525→   525→        case 'alimentar':
+   526→   526→          rt.stats.comida = clamp(rt.stats.comida + 25)
+   527→   527→          get().spawnParticles('🍖', pet.x, pet.y - 3, 2)
+   528→   528→          sfx.eat()
+   529→   529→          break
+   530→   530→        case 'acariciar':
+   531→   531→          rt.stats.felicidad = clamp(rt.stats.felicidad + 8)
+   532→   532→          get().spawnParticles('❤️', pet.x, pet.y - 3, 2)
+   533→   533→          sfx.happy()
+   534→   534→          break
+   535→   535→        case 'jugar':
+   536→   536→          if (rt.stats.energia < 10) {
+   537→   537→            toast(`⚡ ${pet.name} está muy cansado/a para jugar`)
+   538→   538→            return
+   539→   539→          }
+   540→   540→          rt.stats.felicidad = clamp(rt.stats.felicidad + 15)
+   541→   541→          rt.stats.energia = clamp(rt.stats.energia - 8)
+   542→   542→          get().spawnParticles('🎾', pet.x, pet.y - 3, 2)
+   543→   543→          sfx.happy()
+   544→   544→          break
+   545→   545→        case 'banar':
+   546→   546→          rt.stats.higiene = clamp(rt.stats.higiene + 30)
+   547→   547→          get().spawnParticles('🫧', pet.x, pet.y - 3, 3)
+   548→   548→          sfx.magic()
+   549→   549→          break
+   550→   550→        case 'dormir':
+   551→   551→          if (rt.state === 'sleep') {
+   552→   552→            rt.state = 'idle'
+   553→   553→            rt.wanderAt = now
+   554→   554→            sfx.wake()
+   555→   555→          } else {
+   556→   556→            rt.state = 'sleep'
+   557→   557→            sfx.click()
+   558→   558→          }
+   559→   559→          break
+   560→   560→        case 'curar':
+   561→   561→          if (!rt.sick) {
+   562→   562→            toast(`😊 ${pet.name} está sano/a`)
+   563→   563→            return
+   564→   564→          }
+   565→   565→          rt.sick = false
+   566→   566→          rt.stats.felicidad = clamp(rt.stats.felicidad + 10)
+   567→   567→          get().spawnParticles('💊', pet.x, pet.y - 3, 3)
+   568→   568→          sfx.magic()
+   569→   569→          coins += 6
+   570→   570→          break
+   571→   571→      }
+   572→   572→
+   573→   573→      // Reglas del tipo "CUANDO la acaricies..."
+   574→   574→      if (action === 'acariciar') {
+   575→   575→        for (const rule of s.rules) {
+   576→   576→          if (rule.trigger !== 'acariciar') continue
+   577→   577→          if (rule.petId !== 'cualquiera' && rule.petId !== pet.id) continue
+   578→   578→          const delta = rule.effect === 'aumentar' ? rule.amount : -rule.amount
+   579→   579→          rt.stats[rule.stat] = clamp(rt.stats[rule.stat] + delta)
+   580→   580→          get().spawnParticles(delta > 0 ? STATS[rule.stat].emoji : '💨', pet.x, pet.y - 5, 1)
+   581→   581→        }
+   582→   582→      }
+   583→   583→
+   584→   584→      // feedback de voz según la acción
+   585→   585→      if (action === 'dormir') {
+   586→   586→        if (rt.state === 'sleep') speak(set, get, pet, 'sueno')
+   587→   587→        else speak(set, get, pet, 'normal')
+   588→   588→      } else if (action === 'curar') {
+   589→   589→        speak(set, get, pet, 'feliz')
+   590→   590→      } else {
+   591→   591→        speak(set, get, pet, 'feliz')
+   592→   592→      }
+   593→   593→
+   594→   594→      if (action !== 'dormir' && action !== 'curar' && !rt.sick) {
+   595→   595→        const rewards: Record<string, number> = {
+   596→   596→          alimentar: 3,
+   597→   597→          acariciar: 2,
+   598→   598→          jugar: 4,
+   599→   599→          banar: 3,
+   600→   600→        }
+   601→   601→        coins += rewards[action] ?? 0
+   602→   602→      }
+   603→   603→
+   604→   604→      set({ pets: { ...s.pets, [pet.id]: rt }, coins, actionCd })
+   605→   605→    },
+   606→   606→
+   607→   607→    moveTick: (dtMs) => {
+   608→   608→      const s = get()
+   609→   609→      if (s.mode !== 'play') return
+   610→   610→      const now = Date.now()
+   611→   611→      const dt = Math.min(dtMs, 120) / 1000
+   612→   612→      let moved = false
+   613→   613→      const objects = s.objects.map((o) => ({ ...o }))
+   614→   614→      const pets: Record<string, PetRuntime> = { ...s.pets }
+   615→   615→      // solo se simula el mundo visible; las mascotas de otros mundos descansan
+   616→   616→      const levelObjs = objects.filter((o) => o.level === s.currentLevel)
+   617→   617→      const petObjs = levelObjs.filter(isPetObj)
+   618→   618→      const food = findSpecial(levelObjs, 'food')
+   619→   619→      const bed = findSpecial(levelObjs, 'bed')
+   620→   620→      const toy = findSpecial(levelObjs, 'toy')
+   621→   621→      const bath = findSpecial(levelObjs, 'bath')
+   622→   622→
+   623→   623→      for (const obj of petObjs) {
+   624→   624→        const rt0 = s.pets[obj.id]
+   625→   625→        if (!rt0) continue
+   626→   626→        const rt: PetRuntime = { ...rt0, pairCd: { ...rt0.pairCd } }
+   627→   627→
+   628→   628→        if (rt.state === 'sleep') {
+   629→   629→          pets[obj.id] = rt
+   630→   630→          continue
+   631→   631→        }
+   632→   632→
+   633→   633→        if (rt.state === 'eat') {
+   634→   634→          if (now >= rt.eatUntil) {
+   635→   635→            rt.stats = { ...rt.stats, comida: clamp(rt.stats.comida + 18) }
+   636→   636→            rt.state = 'idle'
+   637→   637→            rt.wanderAt = now + 1200
+   638→   638→            get().spawnParticles('🍖', obj.x, obj.y - 3, 2)
+   639→   639→            sfx.eat()
+   640→   640→          }
+   641→   641→          pets[obj.id] = rt
+   642→   642→          continue
+   643→   643→        }
+   644→   644→
+   645→   645→        // decidir nuevo destino
+   646→   646→        if (rt.state !== 'walk' && now >= rt.wanderAt) {
+   647→   647→          if (rt.stats.comida < 50 && food) {
+   648→   648→            rt.tx = food.x
+   649→   649→            rt.ty = Math.min(95, food.y + 6)
+   650→   650→            rt.targetKind = 'food'
+   651→   651→            rt.state = 'walk'
+   652→   652→          } else if (rt.stats.descanso < 32 && bed) {
+   653→   653→            rt.tx = bed.x
+   654→   654→            rt.ty = Math.min(95, bed.y + 6)
+   655→   655→            rt.targetKind = 'bed'
+   656→   656→            rt.state = 'walk'
+   657→   657→          } else {
+   658→   658→            rt.tx = rand(8, 92)
+   659→   659→            rt.ty = rand(15, 92)
+   660→   660→            rt.targetKind = 'random'
+   661→   661→            rt.state = 'walk'
+   662→   662→          }
+   663→   663→        }
+   664→   664→
+   665→   665→        if (rt.state === 'walk') {
+   666→   666→          const dx = rt.tx - obj.x
+   667→   667→          const dy = rt.ty - obj.y
+   668→   668→          const dist = Math.hypot(dx, dy)
+   669→   669→          const step = (obj.speed ?? 8) * dt
+   670→   670→          if (dist <= Math.max(1.5, step)) {
+   671→   671→            if (rt.targetKind === 'food') {
+   672→   672→              rt.state = 'eat'
+   673→   673→              rt.eatUntil = now + 1600
+   674→   674→            } else if (rt.targetKind === 'bed') {
+   675→   675→              rt.state = 'sleep'
+   676→   676→            } else {
+   677→   677→              rt.state = 'idle'
+   678→   678→              rt.wanderAt = now + rand(1500, 4500)
+   679→   679→            }
+   680→   680→          } else {
+   681→   681→            obj.x = clampPct(obj.x + (dx / dist) * step)
+   682→   682→            obj.y = clampPct(obj.y + (dy / dist) * step)
+   683→   683→            if (Math.abs(dx) > 0.5) rt.facing = dx > 0 ? 1 : -1
+   684→   684→            moved = true
+   685→   685→          }
+   686→   686→        }
+   687→   687→
+   688→   688→        // magia incorporada: juguete = alegría
+   689→   689→        if (toy && now >= rt.toyAt && Math.hypot(toy.x - obj.x, toy.y - obj.y) < 9) {
+   690→   690→          rt.stats = { ...rt.stats, felicidad: clamp(rt.stats.felicidad + 3) }
+   691→   691→          rt.toyAt = now + 6000
+   692→   692→          get().spawnParticles('✨', toy.x, toy.y - 3, 1)
+   693→   693→        }
+   694→   694→
+   695→   695→        // magia incorporada: bañera = higiene
+   696→   696→        if (
+   697→   697→          bath &&
+   698→   698→          now >= (rt.pairCd['bath'] ?? 0) &&
+   699→   699→          Math.hypot(bath.x - obj.x, bath.y - obj.y) < 9 &&
+   700→   700→          rt.stats.higiene < 90
+   701→   701→        ) {
+   702→   702→          rt.stats = { ...rt.stats, higiene: clamp(rt.stats.higiene + 10) }
+   703→   703→          rt.pairCd['bath'] = now + 8000
+   704→   704→          get().spawnParticles('🫧', bath.x, bath.y - 3, 2)
+   705→   705→        }
+   706→   706→
+   707→   707→        pets[obj.id] = rt
+   708→   708→      }
+   709→   709→
+   710→   710→      // reglas del tipo "CUANDO se acerque a..." (misma mascota y mismo mundo)
+   711→   711→      const fired: Array<[Rule, WorldObject]> = []
+   712→   712→      for (const rule of s.rules) {
+   713→   713→        if (rule.trigger !== 'cerca') continue
+   714→   714→        const petTargets =
+   715→   715→          rule.petId === 'cualquiera' ? petObjs : petObjs.filter((o) => o.id === rule.petId)
+   716→   716→        for (const pet of petTargets) {
+   717→   717→          const rt = pets[pet.id]
+   718→   718→          if (!rt) continue
+   719→   719→          const objTargets = levelObjs.filter(
+   720→   720→            (o) =>
+   721→   721→              !isPetObj(o) &&
+   722→   722→              (rule.targetId === 'cualquiera' || o.id === rule.targetId),
+   723→   723→          )
+   724→   724→          for (const target of objTargets) {
+   725→   725→            const key = `${rule.id}:${pet.id}:${target.id}`
+   726→   726→            if (now - (rt.pairCd[key] ?? 0) < 4000) continue
+   727→   727→            if (Math.hypot(target.x - pet.x, target.y - pet.y) < 9) {
+   728→   728→              rt.pairCd[key] = now
+   729→   729→              fired.push([rule, pet])
+   730→   730→              break
+   731→   731→            }
+   732→   732→          }
+   733→   733→        }
+   734→   734→      }
+   735→   735→
+   736→   736→      if (moved) set({ objects, pets })
+   737→   737→      else set({ pets })
+   738→   738→      for (const [rule, pet] of fired) fireRule(set, get, rule, pet)
+   739→   739→    },
+   740→   740→
+   741→   741→    gameTick: () => {
+   742→   742→      const s = get()
+   743→   743→      if (s.mode !== 'play') return
+   744→   744→      const now = Date.now()
+   745→   745→      const pets: Record<string, PetRuntime> = { ...s.pets }
+   746→   746→      let coins = s.coins
+   747→   747→      let lastBonusAt = s.lastBonusAt
+   748→   748→
+   749→   749→      // solo decaen las mascotas del mundo actual (las demás descansan)
+   750→   750→      const activePets = s.objects.filter(
+   751→   751→        (o) => isPetObj(o) && o.level === s.currentLevel && s.pets[o.id],
+   752→   752→      )
+   753→   753→
+   754→   754→      for (const obj of activePets) {
+   755→   755→        const rt0 = s.pets[obj.id]
+   756→   756→        const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats } }
+   757→   757→
+   758→   758→        if (rt.state === 'sleep') {
+   759→   759→          rt.stats.descanso = clamp(rt.stats.descanso + 2.5)
+   760→   760→          rt.stats.energia = clamp(rt.stats.energia + 1)
+   761→   761→          rt.stats.comida = clamp(rt.stats.comida - 0.15)
+   762→   762→          rt.stats.felicidad = clamp(rt.stats.felicidad - 0.05)
+   763→   763→          if (rt.stats.descanso >= 92) {
+   764→   764→            rt.state = 'idle'
+   765→   765→            rt.wanderAt = now
+   766→   766→            sfx.wake()
+   767→   767→          }
+   768→   768→          if (Math.random() < 0.35) get().spawnParticles('💤', obj.x, obj.y - 5, 1)
+   769→   769→        } else {
+   770→   770→          rt.stats.comida = clamp(rt.stats.comida - 0.7)
+   771→   771→          rt.stats.energia = clamp(rt.stats.energia - 0.4)
+   772→   772→          rt.stats.higiene = clamp(rt.stats.higiene - 0.35)
+   773→   773→          rt.stats.descanso = clamp(rt.stats.descanso - 0.45)
+   774→   774→          let decay = 0.25
+   775→   775→          if (rt.stats.comida < 20) decay += 0.8
+   776→   776→          if (rt.stats.higiene < 20) decay += 0.5
+   777→   777→          if (rt.stats.descanso < 20) decay += 0.4
+   778→   778→          if (rt.sick) decay += 0.8
+   779→   779→          rt.stats.felicidad = clamp(rt.stats.felicidad - decay)
+   780→   780→        }
+   781→   781→
+   782→   782→        if (!rt.sick && (rt.stats.comida <= 0.5 || rt.stats.higiene <= 0.5)) {
+   783→   783→          rt.sick = true
+   784→   784→          get().spawnParticles('🤒', obj.x, obj.y - 5, 2)
+   785→   785→          toast(`🤒 ¡${obj.name} se puso enfermo/a! Tócalo/a y usa 🏥 Curar`, { duration: 5000 })
+   786→   786→          sfx.sad()
+   787→   787→          speak(set, get, obj, 'triste')
+   788→   788→        }
+   789→   789→
+   790→   790→        // ===== VOCES: cada mascota suena con su voz según su ánimo =====
+   791→   791→        if (now >= rt.voiceAt && rt.state !== 'sleep') {
+   792→   792→          speak(set, get, obj, moodOf(rt))
+   793→   793→          // cuantas más mascotas haya, más espaciadas las voces (sin cacofonía)
+   794→   794→          const spacing = Math.min(3, Math.max(1, activePets.length / 2))
+   795→   795→          rt.voiceAt = now + rand(9000, 17000) * spacing
+   796→   796→        }
+   797→   797→
+   798→   798→        pets[obj.id] = rt
+   799→   799→      }
+   800→   800→
+   801→   801→      // bonus: todas las mascotas del mundo están felices
+   802→   802→      const allPets = activePets.map((o) => pets[o.id]).filter(Boolean)
+   803→   803→      if (
+   804→   804→        allPets.length > 0 &&
+   805→   805→        allPets.every((rt) => rt.stats.felicidad >= 80) &&
+   806→   806→        now - lastBonusAt > 12000
+   807→   807→      ) {
+   808→   808→        coins += 2
+   809→   809→        lastBonusAt = now
+   810→   810→        toast('🎉 ¡Todas las mascotas están felices! +2 🪙')
+   811→   811→        sfx.coin()
+   812→   812→      }
+   813→   813→
+   814→   814→      // limpiar globos de voz caducados (después de hablar: speak() pudo añadir)
+   815→   815→      const say: Record<string, SayBubbleText> = {}
+   816→   816→      for (const [pid, b] of Object.entries(get().say)) {
+   817→   817→        if (b.until > now) say[pid] = b
+   818→   818→      }
+   819→   819→
+   820→   820→      set({ pets, coins, lastBonusAt, say })
+   821→   821→
+   822→   822→      // reglas del tipo "CADA X segundos..." (mascotas del mundo actual)
+   823→   823→      const ruleAcc = { ...s.ruleAcc }
+   824→   824→      let accChanged = false
+   825→   825→      for (const rule of s.rules) {
+   826→   826→        if (rule.trigger !== 'cada') continue
+   827→   827→        const acc = (ruleAcc[rule.id] ?? 0) + 1
+   828→   828→        if (acc >= Math.max(5, rule.intervalSec)) {
+   829→   829→          ruleAcc[rule.id] = 0
+   830→   830→          accChanged = true
+   831→   831→          const targets = activePets.filter(
+   832→   832→            (o) => rule.petId === 'cualquiera' || o.id === rule.petId,
+   833→   833→          )
+   834→   834→          for (const pet of targets) fireRule(set, get, rule, pet)
+   835→   835→        } else {
+   836→   836→          ruleAcc[rule.id] = acc
+   837→   837→          accChanged = true
+   838→   838→        }
+   839→   839→      }
+   840→   840→      if (accChanged) set({ ruleAcc })
+   841→   841→    },
+   842→   842→
+   843→   843→    spawnParticles: (emoji, x, y, n = 1) => {
+   844→   844→      const parts: Particle[] = []
+   845→   845→      for (let i = 0; i < n; i++) {
+   846→   846→        parts.push({
+   847→   847→          id: uid() + i,
+   848→   848→          emoji,
+   849→   849→          x: clampPct(x + rand(-4, 4)),
+   850→   850→          y: clampPct(y + rand(-3, 3)),
+   851→   851→        })
+   852→   852→      }
+   853→   853→      set({ particles: [...get().particles, ...parts] })
+   854→   854→      const ids = parts.map((p) => p.id)
+   855→   855→      setTimeout(() => {
+   856→   856→        set({ particles: get().particles.filter((p) => !ids.includes(p.id)) })
+   857→   857→      }, 1300)
+   858→   858→    },
+   859→   859→  }
+   860→   860→})
+   861→   861→

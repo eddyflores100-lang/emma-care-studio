@@ -3,8 +3,13 @@
 // Lienzo del mundo: aquí se colocan los objetos (editor) y viven las
 // mascotas (modo juego). Soporta arrastrar desde la biblioteca (HTML5 DnD)
 // y mover objetos ya colocados (pointer events, funciona con táctil).
-// El fondo cambia según el mundo/nivel activo y las mascotas muestran
-// caras de ánimo y globos de voz (¡Guau!, ¡Miau...).
+//
+// Modo juego:
+//  · Caras de ánimo y de persecución (😠 persigue / 😱 huye)
+//  · Escondites (mascota detrás, 👀 asomándose) y trepaderas (encima)
+//  · Acariciar con el dedo: frotar la mascota = caricia de verdad
+//  · Pelota lanzable, lluvia, mariposa y caja sorpresa
+//  · La pantalla tiembla cuando hay una persecución (y vibra el móvil)
 
 import React, { useRef } from 'react'
 import { useStudio } from '@/lib/studio/store'
@@ -20,7 +25,8 @@ function hueFilter(hue: number) {
 }
 
 /** Cara de la mascota según su estado (expresiones para todos los animales) */
-function petFace(rt: PetRuntime): string | null {
+function petFace(rt: PetRuntime, now: number): string | null {
+  if (rt.chaseUntil > now) return rt.chaseRole === 'chase' ? '😠' : '😱'
   if (rt.state === 'sleep' || rt.state === 'eat') return null // tienen su propio símbolo
   if (rt.sick) return '🤒'
   if (rt.stats.comida < 25) return '😟'
@@ -42,9 +48,19 @@ function petBubble(rt: PetRuntime): string | null {
   return null
 }
 
+/** chip de orden que está obedeciendo */
+function obeyChip(rt: PetRuntime, now: number): string | null {
+  if (!rt.obey || now >= rt.obey.until) return null
+  return rt.obey.cmd === 'sit' ? '🪑' : rt.obey.cmd === 'stay' ? '✋' : '👉'
+}
+
 export function WorldCanvas() {
   const canvasRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ id: string; offX: number; offY: number } | null>(null)
+  // gesto de caricia: frotar el dedo (o el ratón) sobre la mascota
+  const strokeRef = useRef<{ id: string; dist: number; lastX: number; lastY: number } | null>(
+    null,
+  )
 
   const mode = useStudio((s) => s.mode)
   const objects = useStudio((s) => s.objects)
@@ -53,13 +69,22 @@ export function WorldCanvas() {
   const say = useStudio((s) => s.say)
   const selectedId = useStudio((s) => s.selectedId)
   const currentLevel = useStudio((s) => s.currentLevel)
+  const event = useStudio((s) => s.event)
+  const ball = useStudio((s) => s.ball)
+  const ballPending = useStudio((s) => s.ballPending)
+  const shakeUntil = useStudio((s) => s.shakeUntil)
   const select = useStudio((s) => s.select)
   const selectForEdit = useStudio((s) => s.selectForEdit)
   const addObject = useStudio((s) => s.addObject)
   const updateObject = useStudio((s) => s.updateObject)
+  const petPet = useStudio((s) => s.petPet)
+  const throwBallAt = useStudio((s) => s.throwBallAt)
+  const claimGift = useStudio((s) => s.claimGift)
 
   const levelDef = levelById[currentLevel]
   const now = Date.now()
+  const shaking = now < shakeUntil
+  const raining = mode === 'play' && event?.kind === 'lluvia'
   // solo se ven los objetos del mundo activo
   const visible = objects.filter((o) => o.level === currentLevel)
 
@@ -81,31 +106,54 @@ export function WorldCanvas() {
   }
 
   function pointerDown(e: React.PointerEvent, obj: WorldObject) {
-    if (mode !== 'edit') return
-    e.stopPropagation()
-    selectForEdit(obj.id)
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    dragRef.current = {
-      id: obj.id,
-      offX: e.clientX - rect.left - (obj.x / 100) * rect.width,
-      offY: e.clientY - rect.top - (obj.y / 100) * rect.height,
-    }
-    try {
-      ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-    } catch {
-      // algunos navegadores antiguos no soportan captura: no pasa nada
+    if (mode === 'edit') {
+      e.stopPropagation()
+      selectForEdit(obj.id)
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (!rect) return
+      dragRef.current = {
+        id: obj.id,
+        offX: e.clientX - rect.left - (obj.x / 100) * rect.width,
+        offY: e.clientY - rect.top - (obj.y / 100) * rect.height,
+      }
+      try {
+        ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      } catch {
+        // algunos navegadores antiguos no soportan captura: no pasa nada
+      }
+    } else if (mode === 'play') {
+      // empezar el gesto de caricia (frotar)
+      e.stopPropagation()
+      strokeRef.current = { id: obj.id, dist: 0, lastX: e.clientX, lastY: e.clientY }
+      try {
+        ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+      } catch {
+        // sin captura: también funciona
+      }
     }
   }
 
   function pointerMove(e: React.PointerEvent, obj: WorldObject) {
-    const d = dragRef.current
-    if (!d || d.id !== obj.id || mode !== 'edit') return
-    const rect = canvasRef.current?.getBoundingClientRect()
-    if (!rect) return
-    const x = clampPct(((e.clientX - rect.left - d.offX) / rect.width) * 100)
-    const y = clampPct(((e.clientY - rect.top - d.offY) / rect.height) * 100)
-    updateObject(obj.id, { x, y })
+    if (mode === 'edit') {
+      const d = dragRef.current
+      if (!d || d.id !== obj.id) return
+      const rect = canvasRef.current?.getBoundingClientRect()
+      if (!rect) return
+      const x = clampPct(((e.clientX - rect.left - d.offX) / rect.width) * 100)
+      const y = clampPct(((e.clientY - rect.top - d.offY) / rect.height) * 100)
+      updateObject(obj.id, { x, y })
+    } else if (mode === 'play') {
+      const st = strokeRef.current
+      if (!st || st.id !== obj.id) return
+      st.dist += Math.hypot(e.clientX - st.lastX, e.clientY - st.lastY)
+      st.lastX = e.clientX
+      st.lastY = e.clientY
+      // frotó lo suficiente → ¡caricia!
+      if (st.dist > 42) {
+        strokeRef.current = null
+        petPet(obj.id)
+      }
+    }
   }
 
   function pointerUp(e: React.PointerEvent, obj: WorldObject) {
@@ -113,6 +161,7 @@ export function WorldCanvas() {
       dragRef.current = null
       sfx.click()
     }
+    if (strokeRef.current?.id === obj.id) strokeRef.current = null
   }
 
   function handleObjectClick(obj: WorldObject) {
@@ -125,16 +174,27 @@ export function WorldCanvas() {
     }
   }
 
+  function handleCanvasClick(e: React.MouseEvent) {
+    if (mode === 'play' && ballPending) {
+      const p = pointFromClient(e.clientX, e.clientY)
+      throwBallAt(p.x, p.y)
+      return
+    }
+    select(null)
+  }
+
   return (
     <div
       ref={canvasRef}
       className={cn(
         'relative h-full w-full overflow-hidden rounded-3xl border-4 border-white shadow-md select-none',
         levelDef?.bg ?? 'grass',
+        shaking && 'canvas-shake',
+        ballPending && 'cursor-crosshair',
       )}
       onDragOver={(e) => e.preventDefault()}
       onDrop={handleDrop}
-      onClick={() => select(null)}
+      onClick={handleCanvasClick}
       role="application"
       aria-label={`Mundo del juego: ${levelDef?.name ?? 'Jardín'}`}
     >
@@ -200,9 +260,13 @@ export function WorldCanvas() {
         const rt = mode === 'play' ? pets[obj.id] : undefined
         const selected = selectedId === obj.id
         const bubble = rt ? petBubble(rt) : null
-        const face = rt ? petFace(rt) : null
+        const face = rt ? petFace(rt, now) : null
+        const chip = rt ? obeyChip(rt, now) : null
         const voice = isPet ? say[obj.id] : undefined
         const voiceText = voice && voice.until > now ? voice.text : null
+        const chasing = !!(rt && rt.chaseUntil > now)
+        const hidden = !!(rt && rt.hiding)
+        const onTop = !!(rt && rt.onTopOf)
         return (
           <div
             key={obj.id}
@@ -217,8 +281,10 @@ export function WorldCanvas() {
             style={{
               left: `${obj.x}%`,
               top: `${obj.y}%`,
-              transform: 'translate(-50%, -60%)',
-              zIndex: isPet ? 20 : 10,
+              transform: onTop
+                ? 'translate(-50%, -60%) translateY(-20px)'
+                : 'translate(-50%, -60%)',
+              zIndex: hidden ? 8 : onTop ? 30 : isPet ? 20 : 10,
             }}
             onPointerDown={(e) => pointerDown(e, obj)}
             onPointerMove={(e) => pointerMove(e, obj)}
@@ -236,13 +302,18 @@ export function WorldCanvas() {
               style={{ padding: 2 }}
             >
               <span
-                className="block drop-shadow-lg transition-transform"
+                className={cn(
+                  'block drop-shadow-lg transition-transform',
+                  chasing && 'pet-hop',
+                )}
                 style={{
                   fontSize: `${Math.round(30 * obj.size)}px`,
                   filter: hueFilter(obj.hue),
                   transform: `scaleX(${rt?.facing ?? 1})`,
                   lineHeight: 1,
-                }}
+                  opacity: hidden ? 0.55 : 1,
+                  ['--face' as string]: rt?.facing ?? 1,
+                } as React.CSSProperties}
               >
                 {item.emoji}
               </span>
@@ -263,10 +334,28 @@ export function WorldCanvas() {
                 😋
               </span>
             )}
-            {/* cara de ánimo (hambre, sueño, suciedad, tristeza, alegría...) */}
+            {/* cara de ánimo (hambre, sueño, suciedad, tristeza, alegría, persecución...) */}
             {face && (
               <span className="absolute -top-3 -left-2 text-lg drop-shadow" aria-hidden>
                 {face}
+              </span>
+            )}
+            {/* chip de obediencia: está cumpliendo la orden */}
+            {chip && (
+              <span className="absolute -top-3 -right-2 text-base drop-shadow" aria-hidden>
+                {chip}
+              </span>
+            )}
+            {/* escondida: solo se asoman los ojitos */}
+            {hidden && (
+              <span className="absolute -top-5 left-1/2 -translate-x-1/2 text-sm" aria-hidden>
+                👀
+              </span>
+            )}
+            {/* trepada: brillitos de esfuerzo */}
+            {onTop && (
+              <span className="absolute -top-5 left-1/2 -translate-x-1/2 animate-bounce text-sm" aria-hidden>
+                ✨
               </span>
             )}
             {/* globo de petición de cuidado */}
@@ -294,6 +383,65 @@ export function WorldCanvas() {
         )
       })}
 
+      {/* pelota lanzada por el dueño */}
+      {mode === 'play' && ball && ball.until > now && (
+        <span
+          className="ball-drop pointer-events-none absolute text-3xl"
+          style={{ left: `${ball.x}%`, top: `${ball.y}%`, zIndex: 40 }}
+          aria-hidden
+        >
+          🎾
+        </span>
+      )}
+
+      {/* caja sorpresa del evento regalo */}
+      {mode === 'play' && event?.kind === 'regalo' && (
+        <button
+          className="gift-pop absolute animate-bounce rounded-full text-4xl transition-transform active:scale-90"
+          style={{ left: `${event.x}%`, top: `${event.y}%`, zIndex: 45 }}
+          onClick={(e) => {
+            e.stopPropagation()
+            claimGift()
+          }}
+          aria-label="Abrir la caja sorpresa"
+          title="¡Ábreme!"
+        >
+          🎁
+        </button>
+      )}
+
+      {/* mariposa del evento */}
+      {mode === 'play' && event?.kind === 'mariposa' && (
+        <span className="butterfly pointer-events-none absolute text-3xl" style={{ zIndex: 60 }} aria-hidden>
+          🦋
+        </span>
+      )}
+
+      {/* lluvia del evento */}
+      {raining && (
+        <div
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-3xl"
+          style={{ zIndex: 60 }}
+          aria-hidden
+        >
+          <div className="absolute inset-0 bg-slate-600/20" />
+          {Array.from({ length: 26 }).map((_, i) => (
+            <span
+              key={i}
+              className="rain-drop absolute text-base"
+              style={{
+                left: `${(i * 3.9 + (i % 5) * 1.7) % 100}%`,
+                top: '-8%',
+                animationDelay: `${(i % 9) * 0.14}s`,
+                animationDuration: `${0.8 + (i % 4) * 0.14}s`,
+              }}
+            >
+              💧
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* partículas (corazones, comida, monedas...) */}
       {particles.map((p) => (
         <span
@@ -305,6 +453,28 @@ export function WorldCanvas() {
           {p.emoji}
         </span>
       ))}
+
+      {/* aviso del evento sorpresa activo */}
+      {mode === 'play' && event && (
+        <div
+          className="absolute top-2 left-2 z-[70] rounded-full border-2 border-white bg-white/90 px-3 py-1 text-xs font-black text-slate-600 shadow-md"
+          aria-live="polite"
+        >
+          {event.kind === 'lluvia' && '🌧️ ¡Lluvia! Refúgialas'}
+          {event.kind === 'escasez' && '🥣 ¡Poca comida! Aliméntalas'}
+          {event.kind === 'mariposa' && '🦋 ¡Visita de la mariposa!'}
+          {event.kind === 'regalo' && '🎁 ¡Toca la caja sorpresa!'}
+        </div>
+      )}
+
+      {/* pista del modo pelota */}
+      {mode === 'play' && ballPending && (
+        <div className="absolute inset-x-0 top-2 z-[70] flex justify-center">
+          <span className="animate-pulse rounded-full bg-rose-500 px-4 py-1.5 text-xs font-black text-white shadow-lg">
+            🎾 Toca el mundo para lanzar la pelota
+          </span>
+        </div>
+      )}
 
       {/* pista cuando el mundo está vacío */}
       {visible.length === 0 && (
