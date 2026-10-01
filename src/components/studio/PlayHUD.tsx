@@ -64,6 +64,7 @@ export function PlayHUD() {
         {pets.map((p) => {
           const item = catalogById[p.catalogId]
           const active = p.id === selectedId
+          const pRt = petsMap[p.id]
           return (
             <button
               key={p.id}
@@ -76,7 +77,12 @@ export function PlayHUD() {
               )}
             >
               <span className="text-base">{item?.emoji}</span> {p.name}
-              {petsMap[p.id]?.sick && <span aria-hidden>🤒</span>}
+              {pRt && pRt.lvl > 1 && (
+                <span className="rounded-full bg-white/90 px-1 text-[9px] font-black text-violet-600">
+                  Nv{pRt.lvl}
+                </span>
+              )}
+              {pRt?.sick && <span aria-hidden>🤒</span>}
             </button>
           )
         })}
@@ -113,6 +119,22 @@ export function PlayHUD() {
                 </div>
               )
             })}
+          </div>
+
+          {/* nivel y experiencia: ¡cuidarla bien la hace subir! */}
+          <div className="mb-3 flex items-center gap-2">
+            <span className="shrink-0 text-[10px] font-black text-violet-600">
+              ⭐ Nv. {rt.lvl}
+            </span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full border border-violet-100 bg-violet-100">
+              <div
+                className="h-full rounded-full bg-violet-500 transition-all duration-500"
+                style={{ width: `${Math.round(rt.xp)}%` }}
+              />
+            </div>
+            <span className="shrink-0 text-[10px] font-bold text-slate-400">
+              {Math.round(rt.xp)}/100 XP
+            </span>
           </div>
 
           {/* acciones de cuidado */}
@@ -161,12 +183,13 @@ export function PlayHUD() {
             <span className="shrink-0 text-[10px] font-black tracking-wide text-slate-400">
               ÓRDENES:
             </span>
-            <div className="grid flex-1 grid-cols-4 gap-1.5">
+            <div className="grid flex-1 grid-cols-5 gap-1.5">
               {(
                 [
                   { id: 'sit', emoji: '🪑', label: '¡Sentado!' },
                   { id: 'stay', emoji: '✋', label: '¡Quieto!' },
                   { id: 'come', emoji: '👉', label: '¡Ven!' },
+                  { id: 'hide', emoji: '🙈', label: '¡Escondeos!' },
                 ] as { id: Command; emoji: string; label: string }[]
               ).map((c) => (
                 <button
@@ -200,7 +223,7 @@ export function PlayHUD() {
           </div>
 
           <p className="mt-2 hidden text-center text-[11px] font-bold text-slate-400 sm:block">
-            🪙 Gana monedas cuidando a {sel.name} · acaríciala frotando el dedo 👆 · gástalas en la 🛍 Tienda
+            🪙 Gana monedas cuidando a {sel.name} · acaríciala frotando el dedo 👆 · si hay persecución toca la pantalla 👏 · gástalas en la 🛍 Tienda
           </p>
         </>
       )}

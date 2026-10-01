@@ -42,6 +42,7 @@ function petFace(rt: PetRuntime, now: number): string | null {
 function petBubble(rt: PetRuntime): string | null {
   if (rt.state === 'sleep') return null
   if (rt.stats.comida < 20) return '🍖!'
+  if (rt.stats.energia < 22) return '💧!'
   if (rt.stats.descanso < 20) return '😴!'
   if (rt.stats.higiene < 15) return '🧼!'
   if (rt.stats.felicidad < 25) return '😢'
@@ -80,11 +81,15 @@ export function WorldCanvas() {
   const petPet = useStudio((s) => s.petPet)
   const throwBallAt = useStudio((s) => s.throwBallAt)
   const claimGift = useStudio((s) => s.claimGift)
+  const calmAll = useStudio((s) => s.calmAll)
 
   const levelDef = levelById[currentLevel]
   const now = Date.now()
   const shaking = now < shakeUntil
   const raining = mode === 'play' && event?.kind === 'lluvia'
+  // ¿hay una persecución en marcha? (para la pista de calmar con un toque)
+  const chaseActive =
+    mode === 'play' && Object.values(pets).some((rt) => rt.chaseUntil > now)
   // solo se ven los objetos del mundo activo
   const visible = objects.filter((o) => o.level === currentLevel)
 
@@ -179,6 +184,11 @@ export function WorldCanvas() {
       const p = pointFromClient(e.clientX, e.clientY)
       throwBallAt(p.x, p.y)
       return
+    }
+    if (mode === 'play') {
+      // tocar el mundo durante una persecución = aplauso calmante
+      const p = pointFromClient(e.clientX, e.clientY)
+      if (calmAll(p.x, p.y)) return
     }
     select(null)
   }
@@ -334,6 +344,11 @@ export function WorldCanvas() {
                 😋
               </span>
             )}
+            {rt?.state === 'drink' && (
+              <span className="absolute -right-2 -bottom-1 animate-bounce text-base" aria-hidden>
+                💧
+              </span>
+            )}
             {/* cara de ánimo (hambre, sueño, suciedad, tristeza, alegría, persecución...) */}
             {face && (
               <span className="absolute -top-3 -left-2 text-lg drop-shadow" aria-hidden>
@@ -344,6 +359,15 @@ export function WorldCanvas() {
             {chip && (
               <span className="absolute -top-3 -right-2 text-base drop-shadow" aria-hidden>
                 {chip}
+              </span>
+            )}
+            {/* nivel de la mascota: se gana cuidándola y jugando */}
+            {rt && rt.lvl > 1 && (
+              <span
+                className="pointer-events-none absolute -top-2.5 -right-2 rounded-full bg-violet-500 px-1 py-px text-[9px] font-black text-white shadow"
+                aria-hidden
+              >
+                Nv{rt.lvl}
               </span>
             )}
             {/* escondida: solo se asoman los ojitos */}
@@ -464,6 +488,15 @@ export function WorldCanvas() {
           {event.kind === 'escasez' && '🥣 ¡Poca comida! Aliméntalas'}
           {event.kind === 'mariposa' && '🦋 ¡Visita de la mariposa!'}
           {event.kind === 'regalo' && '🎁 ¡Toca la caja sorpresa!'}
+        </div>
+      )}
+
+      {/* pista: ¡tocar la pantalla los calma cuando hay persecución! */}
+      {chaseActive && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 z-[70] flex justify-center">
+          <span className="animate-pulse rounded-full bg-violet-600 px-3 py-1 text-xs font-black text-white shadow-lg">
+            👋 ¡Toca la pantalla para calmarlos!
+          </span>
         </div>
       )}
 

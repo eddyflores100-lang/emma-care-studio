@@ -24,6 +24,7 @@ export const CATALOG: CatalogItem[] = [
   { id: 'house', emoji: '🏠', name: 'Casita', kind: 'home', hide: true, shelter: true },
   { id: 'bed', emoji: '🛏️', name: 'Cama', kind: 'home', special: 'bed' },
   { id: 'bowl', emoji: '🥣', name: 'Comedero', kind: 'home', special: 'food' },
+  { id: 'water', emoji: '🚰', name: 'Bebedero', kind: 'home', special: 'water' },
   { id: 'toy', emoji: '🧸', name: 'Juguete', kind: 'home', special: 'toy' },
   { id: 'bath', emoji: '🛁', name: 'Bañera', kind: 'home', special: 'bath' },
   { id: 'box', emoji: '📦', name: 'Caja', kind: 'home', hide: true },
@@ -44,9 +45,9 @@ export const CATALOG: CatalogItem[] = [
   { id: 'flowers', emoji: '🌸', name: 'Flores', kind: 'nature' },
   { id: 'sunflower', emoji: '🌻', name: 'Girasol', kind: 'nature' },
   { id: 'cactus', emoji: '🌵', name: 'Cactus', kind: 'nature' },
-  { id: 'pond', emoji: '💧', name: 'Estanque', kind: 'nature' },
+  { id: 'pond', emoji: '💧', name: 'Estanque', kind: 'nature', special: 'water' },
   { id: 'mushroom', emoji: '🍄', name: 'Honguito', kind: 'nature' },
-  { id: 'fountain', emoji: '⛲', name: 'Fuente', kind: 'nature' },
+  { id: 'fountain', emoji: '⛲', name: 'Fuente', kind: 'nature', special: 'water' },
   { id: 'umbrella', emoji: '⛱️', name: 'Sombrilla', kind: 'nature', shelter: true },
   { id: 'shell', emoji: '🐚', name: 'Concha', kind: 'nature' },
 ]
@@ -318,6 +319,7 @@ export function makeDemoProject(): { objects: WorldObject[]; rules: Rule[] } {
     mk('bush', 'Arbusto', 82, 76, 1.2),
     mk('box', 'Caja', 6, 58, 1.1),
     mk('bowl', 'Comedero', 38, 72),
+    mk('water', 'Bebedero', 48, 82),
     mk('bed', 'Cama', 16, 76, 1.1),
     mk('toy', 'Juguete', 52, 48),
     mk('dog', 'Max', 47, 56, 1.3, 0, 8),
@@ -357,6 +359,7 @@ export function makeBlankProject(): { objects: WorldObject[]; rules: Rule[] } {
     mk('house', 'Casita', 14, 28, 2.2),
     mk('bush', 'Arbusto', 80, 74, 1.2),
     mk('bowl', 'Comedero', 40, 72),
+    mk('water', 'Bebedero', 52, 84),
     mk('bed', 'Cama', 20, 78, 1.1),
     mk('dog', 'Max', 50, 55, 1.3, 0, 8),
   ]
@@ -372,6 +375,7 @@ export function makeLevelStarters(level: LevelId): WorldObject[] {
     case 'casa':
       return [
         mk('bowl', 'Comedero', 45, 78, 1, 0, undefined, 'casa'),
+        mk('water', 'Bebedero', 56, 86, 1, 0, undefined, 'casa'),
         mk('bed', 'Camita', 15, 80, 1.1, 0, undefined, 'casa'),
         mk('sofa', 'Sofá', 28, 42, 1.8, 0, undefined, 'casa'),
         mk('shelf', 'Estantería', 60, 30, 1.4, 0, undefined, 'casa'),
@@ -383,6 +387,7 @@ export function makeLevelStarters(level: LevelId): WorldObject[] {
     case 'hospital':
       return [
         mk('bowl', 'Comedero', 60, 82, 1, 0, undefined, 'hospital'),
+        mk('water', 'Suero', 70, 86, 1, 180, undefined, 'hospital'),
         mk('bed', 'Camilla', 40, 74, 1.1, 0, undefined, 'hospital'),
         mk('bed', 'Camilla 2', 70, 74, 1.1, 150, undefined, 'hospital'),
         mk('meds', 'Medicina', 85, 28, 1, 0, undefined, 'hospital'),
@@ -391,6 +396,7 @@ export function makeLevelStarters(level: LevelId): WorldObject[] {
     case 'playa':
       return [
         mk('bowl', 'Comedero', 35, 75, 1, 0, undefined, 'playa'),
+        mk('water', 'Cubeta de agua', 46, 84, 1, 180, undefined, 'playa'),
         mk('bed', 'Toalla cama', 22, 80, 1.1, 0, undefined, 'playa'),
         mk('palm', 'Palmera', 12, 32, 1.7, 0, undefined, 'playa'),
         mk('umbrella', 'Sombrilla', 85, 45, 1.5, 0, undefined, 'playa'),

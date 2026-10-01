@@ -15,6 +15,7 @@ node_modules
 
 # next.js
 /.next/
+/.next-export/
 /out/
 
 # production
@@ -52,3 +53,7 @@ prompt
 server.log
 # Skills directory
 /skills/
+# interno del entorno
+tool-results/
+.zscripts/
+agent-ctx/

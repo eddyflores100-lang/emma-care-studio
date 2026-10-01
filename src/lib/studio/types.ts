@@ -4,8 +4,8 @@
 
 export type ObjKind = 'pet' | 'home' | 'nature'
 
-/** Objetos con comportamiento mágico incorporado (comen, duermen, limpian...) */
-export type SpecialKind = 'food' | 'bed' | 'toy' | 'bath'
+/** Objetos con comportamiento mágico incorporado (comen, duermen, limpian, beben...) */
+export type SpecialKind = 'food' | 'bed' | 'toy' | 'bath' | 'water'
 
 /** Mundos/niveles del juego (se desbloquean con monedas) */
 export type LevelId = 'jardin' | 'casa' | 'hospital' | 'playa'
@@ -80,10 +80,10 @@ export interface Rule {
   amount: number
 }
 
-export type PetState = 'idle' | 'walk' | 'eat' | 'sleep'
+export type PetState = 'idle' | 'walk' | 'eat' | 'sleep' | 'drink'
 
 /** órdenes de obediencia que el dueño puede dar */
-export type Command = 'sit' | 'stay' | 'come'
+export type Command = 'sit' | 'stay' | 'come' | 'hide'
 
 /** sorpresas aleatorias del juego */
 export type EventKind = 'lluvia' | 'escasez' | 'mariposa' | 'regalo'
@@ -112,10 +112,17 @@ export interface PetRuntime {
   /** destino actual en % */
   tx: number
   ty: number
-  targetKind: 'random' | 'food' | 'bed'
+  targetKind: 'random' | 'food' | 'bed' | 'water' | 'escape'
+  /** nivel de la mascota (sube con XP por buen cuidado) */
+  lvl: number
+  /** experiencia 0-99: al llegar a 100 sube de nivel */
+  xp: number
+  /** escondite elegido por la orden ¡Escondeos! */
+  hideSpot: string | null
   /** timestamp (ms) en que elegirá nuevo destino */
   wanderAt: number
   eatUntil: number
+  drinkUntil: number
   facing: 1 | -1
   sick: boolean
   toyAt: number

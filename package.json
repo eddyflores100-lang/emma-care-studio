@@ -1,6 +1,6 @@
 {
-  "name": "nextjs_tailwind_shadcn_ts",
-  "version": "0.2.1",
+  "name": "emma-care-studio",
+  "version": "0.4.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
@@ -10,7 +10,8 @@
     "db:push": "prisma db push --accept-data-loss",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "build:export": "EXPORT_MODE=1 next build && rm -rf out && mkdir out && cp -r .next-export/. out/ && test -f out/index.html && echo OK: sitio estático listo en out/"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
