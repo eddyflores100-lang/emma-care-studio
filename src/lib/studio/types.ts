@@ -85,7 +85,7 @@ export interface Rule {
 export type PetState = 'idle' | 'walk' | 'eat' | 'sleep' | 'drink' | 'rest'
 
 /** órdenes de obediencia que el dueño puede dar */
-export type Command = 'sit' | 'stay' | 'come' | 'hide'
+export type Command = 'sit' | 'stay' | 'come' | 'follow' | 'hide' | 'run' | 'walk' | 'jump' | 'dance'
 
 /** sorpresas aleatorias del juego */
 export type EventKind = 'lluvia' | 'escasez' | 'mariposa' | 'regalo'
@@ -101,6 +101,7 @@ export interface GameEvent {
 
 /** pelota lanzable por el dueño (el perro y el zorro la buscan) */
 export interface Ball {
+  targetId?: string | null
   id: string
   x: number
   y: number
@@ -152,14 +153,12 @@ export interface PetRuntime {
   onTopOf: string | null
   // ===== órdenes del dueño (sentado, quieto, ven) =====
   obey: { cmd: Command; until: number } | null
-  /** orden por voz con destino: "¡Max a la casa!" — camina hasta el lugar indicado.
-   *  spotId: id del objeto-destino (la casita) para poder ENTRAR en él al llegar */
-  goTo: { dest: 'casa' | 'cama' | 'agua' | 'comida'; until: number; spotId?: string | null } | null
-  // ===== la casita es de verdad: se pueden MANDAR DENTRO =====
-  /** si no es null: la mascota está DENTRO de este objeto (la casa). Ahí dentro
-   *  descansa tranquila: no deambula, no pelea, no hace travesuras. Sale solo
-   *  cuando la dueña la llama («¡Max ven!», «¡salgan!») o desde el panel de la casa */
+  /** orden por voz con destino: "¡Max a la casa!" — camina hasta el lugar indicado */
   inside: string | null
+  hospitalStatus: 'waiting' | 'treating' | 'ready' | null
+  roamStep: number
+  bonds: Record<string,number>
+  goTo: { spotId?: string | null; dest: 'casa' | 'casita' | 'cama' | 'agua' | 'comida' | 'bano'; until: number } | null
 }
 
 export interface Particle {
@@ -177,13 +176,32 @@ export interface SayBubble {
 
 export interface SavedProject {
   /** v1 = sin mundos (todo jardín); v2 = con niveles y desbloqueos */
-  version: 1 | 2
+  version: 1 | 2 | 3
   objects: WorldObject[]
   rules: Rule[]
   coins: number
   savedAt: string
   unlockedLevels?: LevelId[]
   currentLevel?: LevelId
+  pets?: Record<string, SavedPet>
+  careMissions?: Record<'alimentar' | 'acariciar' | 'banar',number>
+}
+
+/** Durable progress; transient fights/targets are never resumed after importing. */
+export interface SavedPet {
+  stats: Record<StatKey, number>
+  lvl: number
+  xp: number
+  injured: boolean
+  sick: boolean
+  state: 'idle' | 'sleep' | 'rest'
+  healRemaining: number
+  restRemaining: number
+  stay: boolean
+  bonds?: Record<string,number>
+  inside?: string | null
+  hospitalStatus?: 'waiting' | 'treating' | 'ready' | null
+  hold?: { cmd: 'stay' | 'sit'; remaining: number | null } | null
 }
 
 export type PlayerAction = 'alimentar' | 'acariciar' | 'jugar' | 'banar' | 'dormir' | 'curar'

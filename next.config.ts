@@ -19,12 +19,12 @@ const nextConfig: NextConfig = isExport
       images: { unoptimized: true },
       trailingSlash: true,
       basePath: basePath || undefined,
-      typescript: { ignoreBuildErrors: true },
+      typescript: { ignoreBuildErrors: false },
       reactStrictMode: false,
     }
   : {
       output: "standalone",
-      typescript: { ignoreBuildErrors: true },
+      typescript: { ignoreBuildErrors: false },
       reactStrictMode: false,
     };
 

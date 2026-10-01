@@ -1,27 +1,22 @@
 'use client'
 
-// Emma Care Studio — comandos por VOZ (Web Speech API) v3
+// Emma Care Studio — comandos por VOZ (Web Speech API) v2
 // La niña habla y sus mascotas obedecen. Todo funciona MIENTRAS SUENA:
 //  · "¡Quietos!"            → se acaban las peleas y todos se congelan
-//  · "¡Salgan!" / "¡Fuera!"  → salen de la casa al patio
 //  · "¡Escondeos!" / refugio → corren a esconderse
 //  · "¡Ven!" / "¡Aquí!"     → vienen hacia la dueña
 //  · "¡Sentado!"            → se sientan
 //  · "¡Max!" (su nombre)    → contesta y viene
-//  · "¡Max a la casa!"      → Max ENTRA en la casita y se queda quieto
-//                             (también cama, agua o comida)
+//  · "¡Max a la casa!"      → Max camina hasta la casita (también cama,
+//                             agua o comida)
 //  · "hospital"             → la más herida viaja en ambulancia
 //  · "pelota"               → prepara el lanzamiento
-//
-// PRIORIDAD DE ÓRDENES (para diferenciarlas claramente entre sí):
-//   calm > out > hide > goto(destino) > hospital > ball > sit > come > call
-//   Así «ven a la casa» = IR a la casa (destino gana a ven),
-//   pero «¡ven!» a secas = venir hacia la dueña.
 //
 // Motor SINGLETON: vive fuera de React para que pueda arrancar solo
 // (dentro del gesto de tocar ▶ ¡JUGAR!) y sobrevivir a los renders.
 
 import { useSyncExternalStore } from 'react'
+import { catalogById } from './catalog'
 import type { WorldObject } from './types'
 
 /** quita mayúsculas, acentos y signos: "¡Quietos!" → "quietos" */
@@ -52,113 +47,116 @@ function lev(a: string, b: string): number {
   return dp[m][n]
 }
 
-// ===== vocabulario de órdenes (todo normalizado, sin acentos) =====
+// Vocabulary is shared by the parser and the command help panel.
 const WORDS = {
-  calm: [
-    'quieto', 'quietos', 'quietas', 'quietecitos', 'para', 'paren', 'alto', 'basta',
-    'calmense', 'calmados', 'suficiente', 'no peleen', 'no pelear', 'no pelees',
-    'dejense', 'basta de pelea', 'alto ahi', 'stop',
-  ],
-  hide: [
-    'escondeos', 'escondanse', 'esconde', 'esconder', 'esconderse', 'escondite',
-    'refugio', 'ocultense', 'a esconderse', 'escondite ya', 'busquen refugio',
-  ],
+  calm: ['quieto', 'quietos', 'quieta', 'quietas', 'para', 'paren', 'alto', 'basta', 'calmense', 'no peleen', 'no pelees', 'no pelear', 'separense', 'stop'],
+  hide: ['escondeos', 'escondanse', 'esconde', 'esconderse', 'escondite', 'refugio', 'ocultense'],
   sit: ['sentado', 'sentados', 'sentate', 'sientate', 'sientense', 'sienta'],
-  come: ['ven', 'ven aqui', 'ven aca', 'aqui', 'aca', 'vengan', 'vengan aqui', 'vamos'],
-  out: [
-    'salgan', 'salid', 'salgan fuera', 'salgan de la casa', 'sal de la casa',
-    'fuera', 'afuera', 'vamos afuera', 'salgan ya', 'fuera de ahi', 'salgan al jardin',
-  ],
-  hospital: ['hospital', 'ambulancia', 'medico', 'doctora', 'cura', 'curar'],
-  ball: ['pelota', 'bola', 'lanza la pelota', 'tira la pelota', 'trae la pelota'],
+  come: ['ven', 'ven aqui', 'ven aca', 'aqui', 'aca', 'vengan', 'vengan aqui'],
+  ball: ['pelota', 'bola', 'lanza la pelota', 'tira la pelota'],
+  run: ['corre', 'corran', 'correr', 'a correr'],
+  walk: ['pasea', 'paseen', 'camina', 'caminen', 'paseo'],
+  free: ['libre', 'libres', 'suelto', 'sueltos', 'deja eso', 'suelta eso', 'puedes moverte', 'a jugar'],
+  rest: ['descansa', 'descansen', 'reposo'],
+  wake: ['despierta', 'despierten', 'levantate'],
+  jump: ['salta', 'salten', 'saltar'],
+  dance: ['baila', 'bailen', 'bailar'],
+  follow: ['sigueme', 'siganme', 'acompaname'],
+  out: ['salgan', 'sal', 'salid', 'fuera', 'salgan de la casita'],
+  greet: ['hola', 'saluda', 'saluden', 'buenos dias', 'buenas tardes', 'buenas noches'],
+  treat: ['tratamiento', 'tratar', 'cura', 'curate'],
 } as const
-
-// destinos: "a la casa", "casa", "a la cama", "toma agua", "a comer"…
-const DESTS: { dest: 'casa' | 'cama' | 'agua' | 'comida'; words: string[] }[] = [
-  {
-    dest: 'casa',
-    words: ['casa', 'casita', 'hogar', 'a la casa', 'a casa', 'ala casa', 'tu casa', 'su casa'],
-  },
-  { dest: 'cama', words: ['cama', 'camita', 'camilla', 'a dormir', 'duermete', 'acuestate', 'a la cama'] },
-  { dest: 'agua', words: ['agua', 'al agua', 'a la agua', 'bebe agua', 'toma agua', 'a beber', 'bebedero'] },
-  {
-    dest: 'comida',
-    words: ['comida', 'comer', 'a comer', 'plato', 'comedero', 'el plato', 'a desayunar', 'a cenar', 'come algo'],
-  },
-]
-
-export type VoiceKind = keyof typeof WORDS | 'call' | 'goto'
-export type VoiceDest = 'casa' | 'cama' | 'agua' | 'comida'
-
+export type VoiceKind = keyof typeof WORDS | 'call' | 'goto' | 'travel'
+export type VoiceDest = 'cama' | 'agua' | 'comida' | 'bano' | 'casita'
 export type VoiceOutcome = 'ok' | 'unknown' | 'noplay'
-
 export interface ParsedVoice {
   kind: VoiceKind
-  /** mascotas mencionadas por nombre (si la niña llamó a alguna) */
   named: WorldObject[]
-  /** nombre que se escuchó, para el mensaje */
   matchedName: string | null
-  /** destino si la orden era de tipo "a la casa/cama/agua/comida" */
   dest?: VoiceDest
+  level?: import('./types').LevelId
 }
-
+const DESTS: { dest: VoiceDest; words: string[] }[] = [
+  { dest: 'casita', words: ['casita', 'refugiarse en casa'] },
+  { dest: 'cama', words: ['cama', 'camita', 'camilla', 'a dormir', 'duermete', 'acuestate'] },
+  { dest: 'agua', words: ['agua', 'bebe', 'beber', 'bebedero', 'toma agua'] },
+  { dest: 'comida', words: ['comida', 'comer', 'comedero', 'desayunar', 'cenar', 'come algo'] },
+  { dest: 'bano', words: ['banate', 'banarse', 'bano', 'banera', 'lavate'] },
+]
+const WORLDS: { level: import('./types').LevelId; words: string[] }[] = [
+  { level: 'casa', words: ['casa', 'hogar'] },
+  { level: 'jardin', words: ['jardin', 'patio', 'afuera'] },
+  { level: 'playa', words: ['playa', 'mar'] },
+  { level: 'hospital', words: ['hospital', 'clinica', 'ambulancia', 'medico', 'doctora', 'curar'] },
+]
 function wordHit(text: string, words: readonly string[]): boolean {
-  return words.some((w) =>
-    w.includes(' ') ? text.includes(w) : new RegExp(`(^| )${w}( |$)`).test(text),
-  )
+  const padded = ` ${text} `
+  return words.some(w => padded.includes(` ${w} `))
 }
-
-/** busca mascotas cuyo nombre aparece en el texto (exacto o con 1 error) */
-function findPetsByName(text: string, pets: WorldObject[]): { named: WorldObject[]; name: string | null } {
-  const named: WorldObject[] = []
-  let name: string | null = null
-  for (const p of pets) {
+function findPetsByName(text: string, pets: WorldObject[]) {
+  // Literal matching: names are data, never regular expressions. Exact matches
+  // win globally, so saying Max cannot simultaneously select Maz.
+  const exact: WorldObject[] = []
+  const used: {start:number;end:number}[] = []
+  const padded = ` ${text} `
+  for (const p of [...pets].sort((a,b) => norm(b.name).length - norm(a.name).length)) {
     const n = norm(p.name)
-    if (n.length < 2) continue
-    // evitar que "casa" del destino coincida con una mascota por fuzzy corto
-    let ok = n.length >= 3 && new RegExp(`(^| )${n}( |$)`).test(text)
-    if (!ok) {
-      for (const tok of text.split(' ')) {
-        if (tok.length < 3) continue
-        // si el token es una palabra de destino, no la tratamos como nombre
-        const isDest = DESTS.some((d) => d.words.includes(tok))
-        if (isDest) continue
-        const d = lev(tok, n)
-        if (d === 0 || (n.length >= 4 && d <= 1) || (n.length === 3 && d <= 1 && tok.length === 3)) {
-          ok = true
-          break
-        }
+    if (!n) continue
+    let start = padded.indexOf(` ${n} `)
+    while (start >= 0) {
+      const end = start + n.length + 1
+      if (!used.some(span => start < span.end && end > span.start)) {
+        exact.push(p); used.push({start,end}); break
       }
-    }
-    if (ok) {
-      named.push(p)
-      name = p.name
+      start = padded.indexOf(` ${n} `, start + 1)
     }
   }
-  return { named, name }
+  if (exact.length) return exact
+  const species = pets.filter(p => {
+    const label = catalogById[p.catalogId]?.name
+    return label && wordHit(text, [norm(label), ...(p.catalogId === 'bird' ? ['pajaro', 'ave'] : [])])
+  })
+  if (species.length === 1) return species
+  if (species.length > 1) return []
+  const reserved = [...Object.values(WORDS).flat(), ...DESTS.flatMap(d => d.words), ...WORLDS.flatMap(d => d.words)]
+  const tokens = text.split(' ').filter(t => t.length >= 3 && !reserved.includes(t))
+  const candidates = pets.filter(p => {
+    const n = norm(p.name)
+    return n.length >= 3 && tokens.some(t => lev(t, n) <= 1 && Math.abs(t.length - n.length) <= 1)
+  })
+  // Ambiguous fuzzy matches must not direct several pets accidentally.
+  return candidates.length === 1 ? candidates : []
 }
-
-/** interpreta lo que se dijo y decide qué orden es y a quién va dirigida.
- *  Las órdenes se diferencian por PRIORIDAD estricta, así nunca se pisan:
- *  quietos > salgan > escondeos > destino > hospital > pelota > sentado > ven > nombre */
 export function parseVoiceCommand(raw: string, pets: WorldObject[]): ParsedVoice | null {
   const t = norm(raw)
   if (!t) return null
-  const { named, name } = findPetsByName(t, pets)
-  // 1) ¡QUIETOS! — el interruptor de emergencia, gana a todo
-  if (wordHit(t, WORDS.calm)) return { kind: 'calm', named, matchedName: name }
-  // 2) ¡SALEN! — salir de la casa
-  if (wordHit(t, WORDS.out)) return { kind: 'out', named, matchedName: name }
-  // 3) ¡ESCONDEOS! — gana al destino («escondeos en la casa» = esconderse)
-  if (wordHit(t, WORDS.hide)) return { kind: 'hide', named, matchedName: name }
-  // 4) destino («a la casa») — ANTES que ven/sentado: «ven a la casa» = ir a la casa
-  const destHit = DESTS.find((d) => d.words.some((w) => wordHit(t, [w])))
-  if (destHit) return { kind: 'goto', named, matchedName: name, dest: destHit.dest }
-  // 5) el resto de órdenes simples
-  const kind = (['hospital', 'ball', 'sit', 'come'] as const).find((k) => wordHit(t, WORDS[k]))
-  if (kind) return { kind, named, matchedName: name }
-  // 6) solo un nombre → la mascota contesta y viene
-  if (named.length) return { kind: 'call', named, matchedName: name }
+  const named = findPetsByName(t, pets)
+  if (named.some(p => pets.filter(other => norm(other.name) === norm(p.name)).length > 1)) return null
+  // Remove recognized names before parsing: a pet named Bola or Sol still
+  // answers its name, and command-like names don't become destinations.
+  let words = ` ${t} `
+  for (const p of named) {
+    words = words.replace(` ${norm(p.name)} `, ' ')
+    const label = catalogById[p.catalogId]?.name
+    if (label) words = words.replace(` ${norm(label)} `, ' ')
+    if (p.catalogId === 'bird') words = words.replace(/ (pajaro|ave) /g, ' ')
+  }
+  const commandText = words.trim()
+  if (!named.length) {
+    const known = [...Object.values(WORDS).flat(), ...DESTS.flatMap(d => d.words), ...WORLDS.flatMap(d => d.words),
+      'todos', 'todas', 'mascotas', 'por', 'favor', 'a', 'al', 'ala', 'la', 'el', 'las', 'los', 'mi', 'tu', 'su', 'se', 'no', 'de', 'mis']
+      .flatMap(w => w.split(' '))
+    if (commandText.split(' ').some(token => !known.includes(token))) return null
+  }
+  const base = { named, matchedName: named.length ? named.map(p => p.name).join(', ') : null }
+  const kind = (Object.keys(WORDS) as (keyof typeof WORDS)[]).find(k => wordHit(commandText, WORDS[k]))
+  if (kind && ['calm','out','hide','treat'].includes(kind)) return { ...base, kind }
+  const world = WORLDS.find(d => wordHit(commandText, d.words))
+  if (world) return { ...base, kind: 'travel', level: world.level }
+  const dest = DESTS.find(d => wordHit(commandText, d.words))
+  if (dest) return { ...base, kind: 'goto', dest: dest.dest }
+  if (kind) return { ...base, kind }
+  if (named.length) return { ...base, kind: 'call' }
   return null
 }
 
@@ -217,7 +215,7 @@ let st: VoiceState = { supported: false, listening: false, error: null, heard: '
 let recog: Recog | null = null
 let want = false
 let restartTimer: number | null = null
-let handler: ((text: string) => void) | null = null
+let handler: ((text: string) => VoiceOutcome) | null = null
 
 function emit() {
   st = { ...st }
@@ -237,21 +235,19 @@ function build(): Recog | null {
   r.maxAlternatives = 3
 
   r.onresult = (e) => {
+    if (!want) return
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i]
       const txt = res?.[0]?.transcript ?? ''
       if (!txt.trim()) continue
       st.heard = txt
       emit()
-      // probamos la alternativa principal y, si no se entiende, las demás
-      if (handler) {
-        handler(txt)
-        if (res?.length > 1) {
-          for (let a = 1; a < res.length; a++) {
-            const alt = res[a]?.transcript
-            if (alt && alt.trim() && norm(alt) !== norm(txt)) handler(alt)
-          }
-        }
+      // Interim transcripts only update the caption. Execute one complete
+      // phrase, and only try alternatives if the previous one was unknown.
+      if (!res.isFinal || !handler) continue
+      for (let a = 0; a < res.length; a++) {
+        const alt = res[a]?.transcript
+        if (alt?.trim() && handler(alt) !== 'unknown') break
       }
     }
   }
@@ -261,14 +257,18 @@ function build(): Recog | null {
       st.listening = false
       st.error = 'permiso'
       emit()
-    } else if (e.error === 'network') {
+    } else if (e.error === 'network' || e.error === 'audio-capture' || e.error === 'language-not-supported') {
+      want = false
+      st.listening = false
       st.error = 'red'
       emit()
-      // la escucha necesita internet; se reintenta sola por si vuelve
+      // Explicit retry avoids hammering a failed speech service indefinitely.
     }
     // 'no-speech' / 'aborted' son normales: onend rearranca solo
   }
   r.onend = () => {
+    st.listening = false
+    emit()
     if (want) {
       // pequeño respiro para no saturar al navegador al rearrancar
       if (restartTimer) window.clearTimeout(restartTimer)
@@ -276,8 +276,12 @@ function build(): Recog | null {
         if (!want) return
         try {
           r.start()
+          st.listening = true
+          emit()
         } catch {
-          /* ya arrancando */
+          want = false
+          st.error = 'red'
+          emit()
         }
       }, 300)
     } else {
@@ -299,8 +303,12 @@ export const voiceEngine = {
     return st
   },
   /** fija quién recibe lo oído (se llama una vez desde la página) */
-  setHandler(fn: (text: string) => void) {
+  setHandler(fn: (text: string) => VoiceOutcome) {
     handler = fn
+  },
+  clearHandler() {
+    handler = null
+    voiceEngine.stop()
   },
   /** arranca la escucha — llamar DENTRO de un gesto (clic) del usuario */
   start() {
@@ -318,10 +326,15 @@ export const voiceEngine = {
     st.heard = ''
     if (!recog) recog = build()
     if (!recog) return
+    if (st.listening) return
     try {
       recog.start()
     } catch {
-      /* ya estaba arrancando: no pasa nada */
+      want = false
+      st.listening = false
+      st.error = 'red'
+      emit()
+      return
     }
     st.listening = true
     emit()

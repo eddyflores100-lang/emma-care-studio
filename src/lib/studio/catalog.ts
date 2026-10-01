@@ -326,8 +326,8 @@ export function makeDemoProject(): { objects: WorldObject[]; rules: Rule[] } {
     mk('cat', 'Misi', 60, 62, 1.2, 0, 9),
     mk('mouse', 'Pinky', 72, 70, 0.9, 0, 11),
   ]
-  const toy = objects[10]
-  const dog = objects[11]
+  const toy = objects.find(o => o.catalogId === 'toy')!
+  const dog = objects.find(o => o.catalogId === 'dog')!
   const rules: Rule[] = [
     {
       id: uid(),

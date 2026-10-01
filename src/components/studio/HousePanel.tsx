@@ -2,7 +2,7 @@
 
 // Emma Care Studio — PANEL DE LA CASITA
 // Se abre al tocar la casita cuando hay mascotas DENTRO (mandadas por voz:
-// «Max a la casa»). Muestra quiénes están dentro, cómo están, y permite
+// «Max a la casita»). Muestra quiénes están dentro, cómo están, y permite
 // sacarlas: una por una («¡Fuera!») o todas juntas («¡Sacar a todos!»).
 
 import { useStudio } from '@/lib/studio/store'
@@ -43,7 +43,7 @@ export function HousePanel() {
 
       {dentro.length === 0 ? (
         <p className="text-[11px] font-bold text-slate-500">
-          Nadie está dentro ahora mismo. Dícionales «¡Max a la casa!» por voz 🎙️
+          Nadie está dentro ahora mismo. Dícionales «¡Max a la casita!» por voz 🎙️
         </p>
       ) : (
         <>

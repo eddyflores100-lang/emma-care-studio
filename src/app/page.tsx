@@ -9,6 +9,8 @@
 
 import { useEffect } from 'react'
 import { useStudio } from '@/lib/studio/store'
+import { createAutosave } from '@/lib/studio/autosave'
+import { keepScreenAwake } from '@/lib/studio/screen'
 import { voiceEngine } from '@/lib/studio/voice'
 import { HeaderBar } from '@/components/studio/HeaderBar'
 import { LevelBar } from '@/components/studio/LevelBar'
@@ -23,36 +25,38 @@ import { RightDrawer } from '@/components/studio/RightDrawer'
 export default function Home() {
   const mode = useStudio((s) => s.mode)
 
+  useEffect(() => {
+    if (mode === 'play') return keepScreenAwake()
+  }, [mode])
+
   // cargar proyecto guardado al abrir + conectar la VOZ con el motor
   useEffect(() => {
     useStudio.getState().hydrate()
     voiceEngine.setHandler((text) => {
-      useStudio.getState().voiceCommand(text)
+      return useStudio.getState().voiceCommand(text)
     })
     // acceso al motor desde la consola (útil para depurar y probar)
     ;(window as unknown as { __emma?: typeof useStudio }).__emma = useStudio
+    return () => voiceEngine.clearHandler()
   }, [])
 
   // ===== AUTOGUARDADO =====
   // se guarda solo 1.2 s después de cualquier cambio importante
   // (objetos, reglas, monedas, mundos) y también al cerrar/ocultar la pestaña
   useEffect(() => {
-    let timer: number | null = null
-    const saveNow = () => {
-      if (timer) window.clearTimeout(timer)
-      timer = null
-      useStudio.getState().saveSilent()
-    }
+    const autosave = createAutosave(() => useStudio.getState().saveSilent())
+    const saveNow = autosave.flush
     const unsub = useStudio.subscribe((s, prev) => {
       const dirty =
-        s.objects !== prev.objects ||
+        s.hydrated && (s.objects !== prev.objects ||
+        s.pets !== prev.pets ||
         s.rules !== prev.rules ||
         s.coins !== prev.coins ||
         s.currentLevel !== prev.currentLevel ||
-        s.unlockedLevels !== prev.unlockedLevels
+        s.unlockedLevels !== prev.unlockedLevels)
       if (!dirty) return
-      if (timer) window.clearTimeout(timer)
-      timer = window.setTimeout(saveNow, 1200)
+      if (s.lastSavedAt > 0) useStudio.setState({ lastSavedAt: 0 })
+      autosave.schedule()
     })
     const onHide = () => {
       if (document.visibilityState === 'hidden') saveNow()
@@ -61,7 +65,7 @@ export default function Home() {
     document.addEventListener('visibilitychange', onHide)
     return () => {
       unsub()
-      if (timer) window.clearTimeout(timer)
+      autosave.dispose()
       window.removeEventListener('pagehide', saveNow)
       document.removeEventListener('visibilitychange', onHide)
     }
@@ -101,7 +105,7 @@ export default function Home() {
             <div className="absolute inset-0 px-2 pb-2 pt-2">
               <WorldCanvas />
             </div>
-            <RightDrawer mode="edit" />
+            <RightDrawer key="edit" mode="edit" />
           </div>
 
           {/* ===== Escritorio: tres columnas + reglas abajo ===== */}
@@ -123,7 +127,7 @@ export default function Home() {
             <WorldCanvas />
           </div>
           <PlayHUD />
-          <RightDrawer mode="play" />
+          <RightDrawer key="play" mode="play" />
           {/* en móvil vertical: mejor de lado */}
           <div className="emma-rotate pointer-events-none fixed left-1/2 top-12 z-40 hidden max-[1024px]:portrait:block">
             🔄 Gira el móvil: ¡se juega mejor en horizontal!

@@ -78,6 +78,7 @@ export function PlayHUD() {
         })
       )}
 
+      {pets.length === 0 && <><VoiceControls /><button type="button" className="emma-dock-btn" aria-label="Mapa de mascotas" onClick={() => window.dispatchEvent(new CustomEvent('emma-drawer-open',{detail:{section:'mapa'}}))}>🗺️</button></>}
       {pets.length > 0 && (
         <>
           <span className="emma-dock-sep" aria-hidden />
@@ -114,6 +115,8 @@ export function PlayHUD() {
           </button>
 
           <VoiceControls />
+          {rt?.hospitalStatus === 'waiting' && <button type="button" onClick={() => playerAction('curar')} className="emma-dock-btn shrink-0 border-teal-300 bg-teal-50" title="Iniciar tratamiento · 15 monedas" aria-label="Iniciar tratamiento por 15 monedas">🩺</button>}
+          <button type="button" className="emma-dock-btn shrink-0 border-sky-300 bg-sky-50" aria-label="Mapa de mascotas" onClick={() => window.dispatchEvent(new CustomEvent('emma-drawer-open',{detail:{section:'mapa'}}))}>🗺️</button>
 
           {rt?.injured && currentLevel !== 'hospital' && (
             <button

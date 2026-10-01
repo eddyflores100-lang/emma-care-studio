@@ -47,4 +47,7 @@ const eslintConfig = [...nextCoreWebVitals, ...nextTypescript, {
   ignores: ["node_modules/**", ".next/**", ".next-export/**", "out/**", "build/**", "next-env.d.ts", "examples/**", "skills"]
 }];
 
+eslintConfig.push({ files: ['tests/**/*.cjs'], rules: {
+  '@typescript-eslint/no-require-imports': 'off', '@typescript-eslint/no-this-alias': 'off',
+} })
 export default eslintConfig;
