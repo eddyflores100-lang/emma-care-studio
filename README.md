@@ -24,8 +24,12 @@
 - **Rivalidades reales**: el perro persigue al gato, el gato al ratón, el zorro a la gallina…
   - Se acercan → **¡el móvil VIBRA** y la pantalla tiembla 😠😱
   - ¡Corren por TODA la pantalla! El gato delante, el perro detrás, con amagues burlones.
+  - Si el rival los alcanza → **¡PELEA!** 💥 y pueden salir **heridos** 🩹 (cojean, no juegan).
   - Escapan **escondiéndose** (📦 arbustos, cajas, casitas) o **trepando** (🌳 árboles, sofás).
   - **Toca la pantalla** para aplaudir y calmarlos 👏 — o diles "¡Quieto!".
+- **Heridos y hospital**: los heridos se van solos a descansar a la casita (cura lenta)…
+  o llévalos en **🚑 ambulancia al hospital** (desbloquéalo con 120🪙): allí **nadie pelea**,
+  todos reposan en las camillas y se curan **mucho más rápido**. Al sanar, vuelven solitos a casa.
 - **Sorpresas aleatorias**: 🌧️ lluvia (¡busca refugio!), 🥣 escasez de comida, 🦋 mariposas, 🎁 cajas sorpresa.
 - **Cuidado real con el dedo**: acaríciala frotando la pantalla, lanza la 🎾 pelota, dale órdenes.
 

@@ -27,7 +27,8 @@ function hueFilter(hue: number) {
 /** Cara de la mascota según su estado (expresiones para todos los animales) */
 function petFace(rt: PetRuntime, now: number): string | null {
   if (rt.chaseUntil > now) return rt.chaseRole === 'chase' ? '😠' : '😱'
-  if (rt.state === 'sleep' || rt.state === 'eat') return null // tienen su propio símbolo
+  if (rt.state === 'sleep' || rt.state === 'eat' || rt.state === 'rest') return null // tienen su propio símbolo
+  if (rt.injured) return '🤕'
   if (rt.sick) return '🤒'
   if (rt.stats.comida < 25) return '😟'
   if (rt.stats.descanso < 25) return '🥱'
@@ -40,7 +41,8 @@ function petFace(rt: PetRuntime, now: number): string | null {
 
 /** Burbuja de petición cuando una necesidad está crítica */
 function petBubble(rt: PetRuntime): string | null {
-  if (rt.state === 'sleep') return null
+  if (rt.state === 'sleep' || rt.state === 'rest') return null
+  if (rt.injured) return '🩹!'
   if (rt.stats.comida < 20) return '🍖!'
   if (rt.stats.energia < 22) return '💧!'
   if (rt.stats.descanso < 20) return '😴!'
@@ -315,6 +317,7 @@ export function WorldCanvas() {
                 className={cn(
                   'block drop-shadow-lg transition-transform',
                   chasing && 'pet-hop',
+                  rt?.injured && rt.state === 'walk' && 'pet-limp',
                 )}
                 style={{
                   fontSize: `${Math.round(30 * obj.size)}px`,
@@ -347,6 +350,11 @@ export function WorldCanvas() {
             {rt?.state === 'drink' && (
               <span className="absolute -right-2 -bottom-1 animate-bounce text-base" aria-hidden>
                 💧
+              </span>
+            )}
+            {rt?.state === 'rest' && (
+              <span className="absolute -top-2 -right-1 animate-pulse text-lg" aria-hidden>
+                {rt.injured || rt.sick ? '🩹' : '💤'}
               </span>
             )}
             {/* cara de ánimo (hambre, sueño, suciedad, tristeza, alegría, persecución...) */}

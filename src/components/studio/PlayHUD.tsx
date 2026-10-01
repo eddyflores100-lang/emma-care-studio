@@ -27,6 +27,7 @@ export function PlayHUD() {
   const select = useStudio((s) => s.select)
   const playerAction = useStudio((s) => s.playerAction)
   const giveCommand = useStudio((s) => s.giveCommand)
+  const sendToHospital = useStudio((s) => s.sendToHospital)
   const toggleBallMode = useStudio((s) => s.toggleBallMode)
   const actionCd = useStudio((s) => s.actionCd)
 
@@ -83,6 +84,7 @@ export function PlayHUD() {
                 </span>
               )}
               {pRt?.sick && <span aria-hidden>🤒</span>}
+              {pRt?.injured && <span aria-hidden>🩹</span>}
             </button>
           )
         })}
@@ -176,6 +178,15 @@ export function PlayHUD() {
                 <span className="text-[10px] text-teal-700">Curar</span>
               </button>
             )}
+            {rt.injured && currentLevel !== 'hospital' && (
+              <button
+                onClick={() => sendToHospital(sel.id)}
+                className="flex h-14 flex-col items-center justify-center gap-0.5 rounded-2xl border-2 border-sky-300 bg-sky-50 font-black transition-all hover:bg-sky-100 active:scale-95 sm:h-16"
+              >
+                <span className="text-2xl">🚑</span>
+                <span className="text-[10px] text-sky-700">Hospital</span>
+              </button>
+            )}
           </div>
 
           {/* órdenes de adiestramiento + pelota */}
@@ -223,7 +234,7 @@ export function PlayHUD() {
           </div>
 
           <p className="mt-2 hidden text-center text-[11px] font-bold text-slate-400 sm:block">
-            🪙 Gana monedas cuidando a {sel.name} · acaríciala frotando el dedo 👆 · si hay persecución toca la pantalla 👏 · gástalas en la 🛍 Tienda
+            🪙 Gana monedas cuidando a {sel.name} · si sale herido/a de una correteada llévalo en 🚑 al hospital · en el hospital nadie pelea: todos en reposo · gástalas en la 🛍 Tienda
           </p>
         </>
       )}

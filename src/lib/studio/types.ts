@@ -60,6 +60,8 @@ export interface WorldObject {
   speed?: number
   /** mundo al que pertenece el objeto */
   level: LevelId
+  /** mundo de origen de la mascota (para volver del hospital curada) */
+  home?: LevelId
 }
 
 export type StatKey = 'felicidad' | 'comida' | 'energia' | 'higiene' | 'descanso'
@@ -80,7 +82,7 @@ export interface Rule {
   amount: number
 }
 
-export type PetState = 'idle' | 'walk' | 'eat' | 'sleep' | 'drink'
+export type PetState = 'idle' | 'walk' | 'eat' | 'sleep' | 'drink' | 'rest'
 
 /** órdenes de obediencia que el dueño puede dar */
 export type Command = 'sit' | 'stay' | 'come' | 'hide'
@@ -112,11 +114,18 @@ export interface PetRuntime {
   /** destino actual en % */
   tx: number
   ty: number
-  targetKind: 'random' | 'food' | 'bed' | 'water' | 'escape'
+  targetKind: 'random' | 'food' | 'bed' | 'water' | 'escape' | 'shelter'
   /** nivel de la mascota (sube con XP por buen cuidado) */
   lvl: number
   /** experiencia 0-99: al llegar a 100 sube de nivel */
   xp: number
+  // ===== heridas (salen de persecuciones y peleas) =====
+  /** está herido/a: cojea, no pelea ni juega, necesita reposo o hospital */
+  injured: boolean
+  /** momento en que se curará si descansa (en casa tarda más que en el hospital) */
+  healAt: number
+  /** si está en reposo: momento en que se levanta (las sanas también descansan) */
+  restUntil: number
   /** escondite elegido por la orden ¡Escondeos! */
   hideSpot: string | null
   /** timestamp (ms) en que elegirá nuevo destino */

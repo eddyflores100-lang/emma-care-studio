@@ -446,3 +446,16 @@ body {
 .emma-saved {
   animation: emma-saved 3s ease-out forwards;
 }
+
+/* cojera: la mascota herida camina inclinándose poco a poco */
+@keyframes emma-limp {
+  0% {
+    transform: scaleX(var(--face, 1)) rotate(-5deg) translateY(0);
+  }
+  100% {
+    transform: scaleX(var(--face, 1)) rotate(5deg) translateY(-2px);
+  }
+}
+.pet-limp {
+  animation: emma-limp 0.45s ease-in-out infinite alternate;
+}

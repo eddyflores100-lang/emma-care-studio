@@ -45,6 +45,15 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a)
 /** duración de una persecución (ms): ¡ahora cruzan TODA la pantalla! */
 const CHASE_MS = 7800
 
+// ===== HERIDAS Y HOSPITAL =====
+/** curación descansando en casa (lenta) */
+const HEAL_HOME_MS = 75000
+/** curación en reposo hospitalario (¡rápida!) */
+const HEAL_HOSPITAL_MS = 25000
+/** probabilidad de salir herido/a de una correteada */
+const INJURY_CHASE = 0.45
+const INJURY_FIGHT = 0.65
+
 /** vibra el teléfono (Android Chrome; en iPhone no está disponible y no pasa nada) */
 function vib(pattern: number | number[]) {
   if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
@@ -101,6 +110,9 @@ function makeRuntime(): PetRuntime {
     targetKind: 'random',
     lvl: 1,
     xp: 0,
+    injured: false,
+    healAt: 0,
+    restUntil: 0,
     hideSpot: null,
     wanderAt: 0,
     eatUntil: 0,
@@ -123,6 +135,7 @@ function makeRuntime(): PetRuntime {
 /** Ánimo actual de una mascota: decide su voz y su cara */
 function moodOf(rt: PetRuntime): Mood {
   if (rt.sick) return 'triste'
+  if (rt.injured) return 'triste'
   if (rt.chaseUntil > Date.now()) return rt.chaseRole === 'chase' ? 'enojado' : 'miedo'
   if (rt.stats.comida < 30) return 'hambre'
   if (rt.stats.descanso < 30) return 'sueno'
@@ -167,6 +180,81 @@ function nearestEscapeSpot(levelObjs: WorldObject[], from: WorldObject) {
     }
   }
   return best
+}
+
+/** busca la camilla/cama más cercana (para el reposo en el hospital y en casa) */
+function nearestBed(levelObjs: WorldObject[], from: WorldObject) {
+  let best: WorldObject | null = null
+  let bestD = Infinity
+  for (const o of levelObjs) {
+    if (isPetObj(o)) continue
+    if (catalogById[o.catalogId]?.special !== 'bed') continue
+    const d = Math.hypot(o.x - from.x, o.y - from.y)
+    if (d < bestD) {
+      bestD = d
+      best = o
+    }
+  }
+  return best
+}
+
+/** busca el lugar más cercano para descansar en casa (casita, tienda, cama…) */
+function nearestShelter(levelObjs: WorldObject[], from: WorldObject) {
+  let best: WorldObject | null = null
+  let bestD = Infinity
+  for (const o of levelObjs) {
+    if (isPetObj(o)) continue
+    const it = catalogById[o.catalogId]
+    if (!it || (!it.shelter && it.special !== 'bed' && !it.hide)) continue
+    const d = Math.hypot(o.x - from.x, o.y - from.y)
+    if (d < bestD) {
+      bestD = d
+      best = o
+    }
+  }
+  return best
+}
+
+/**
+ * ¡Ay! La mascota salió herida de una correteada o pelea.
+ * Cojea, no pelea ni juega, y se va sola a descansar a la casita.
+ * Solo el hospital (desbloqueado con monedas) la cura rápido.
+ */
+function markInjured(set: StoreSet, get: StoreGet, pet: WorldObject, rt: PetRuntime, fought: boolean) {
+  if (rt.injured) return
+  rt.injured = true
+  rt.state = 'idle'
+  rt.wanderAt = Date.now() + 900
+  get().spawnParticles('🩹', pet.x, pet.y - 4, 2)
+  get().spawnParticles('💫', pet.x, pet.y - 7, 1)
+  sfx.sad()
+  speak(set, get, pet, 'triste')
+  toast(
+    fought
+      ? `💥 ¡${pet.name} salió herido/a de la pelea! Descansará en casa… o llévalo al 🏥`
+      : `🩹 ¡${pet.name} se lastimó corriendo! Descansará en casa… o llévalo al 🏥`,
+    { duration: 4500 },
+  )
+}
+
+/** cuando una mascota se cura en el hospital, vuelve solita a su mundo en ambulancia */
+function returnHomeAfterHeal(set: StoreSet, get: StoreGet, petId: string, home: LevelId) {
+  setTimeout(() => {
+    const st = get()
+    if (st.mode !== 'play') return
+    const pet = st.objects.find((o) => o.id === petId)
+    if (!pet || pet.level === home) return
+    set({
+      objects: st.objects.map((o) => (o.id === petId ? { ...o, level: home } : o)),
+      pets: {
+        ...st.pets,
+        [petId]: { ...st.pets[petId], state: 'idle', wanderAt: Date.now() },
+      },
+    })
+    get().spawnParticles('🚑', pet.x, pet.y - 5, 2)
+    toast(`🚑 ¡${pet.name} volvió a casa curado/a!`, { duration: 3200 })
+    sfx.happy()
+  }, 2600)
 }
 
 export type MobileTab = 'objetos' | 'ajustes' | 'reglas'
@@ -234,6 +322,8 @@ interface StudioState {
   petPet: (id: string) => void
   /** dar una orden de obediencia a la mascota seleccionada */
   giveCommand: (cmd: Command) => void
+  /** llevar en ambulancia a la mascota herida/enferma al hospital (requiere desbloquearlo) */
+  sendToHospital: (id: string) => void
   /** el dueño toca la pantalla: ¡se acaban las persecuciones! Devuelve true si calmió algo */
   calmAll: (x: number, y: number) => boolean
   /** activar/desactivar el modo lanzar pelota */
@@ -702,6 +792,11 @@ export const useStudio = create<StudioState>((set, get) => {
           sfx.happy()
           break
         case 'jugar':
+          if (rt.injured) {
+            toast(`🩹 ${pet.name} está herido/a: necesita reposo, no juegos`)
+            sfx.sad()
+            return
+          }
           if (rt.stats.energia < 10) {
             toast(`⚡ ${pet.name} está muy cansado/a para jugar`)
             return
@@ -727,15 +822,31 @@ export const useStudio = create<StudioState>((set, get) => {
           }
           break
         case 'curar':
-          if (!rt.sick) {
+          // las HERIDAS solo se curan en el hospital (o descansando mucho en casa)
+          if (rt.injured && s.currentLevel !== 'hospital') {
+            toast(`🏥 ${pet.name} está herido/a: llévalo al hospital con 🚑 (o que descanse en casa)`, {
+              duration: 4500,
+            })
+            return
+          }
+          if (!rt.sick && !rt.injured) {
             toast(`😊 ${pet.name} está sano/a`)
             return
           }
-          rt.sick = false
-          rt.stats.felicidad = clamp(rt.stats.felicidad + 10)
-          get().spawnParticles('💊', pet.x, pet.y - 3, 3)
-          sfx.magic()
-          coins += 6
+          {
+            const inHosp = s.currentLevel === 'hospital'
+            rt.injured = false
+            rt.sick = false
+            rt.state = 'idle'
+            rt.wanderAt = now
+            rt.stats.felicidad = clamp(rt.stats.felicidad + 10)
+            get().spawnParticles('💊', pet.x, pet.y - 3, 3)
+            sfx.magic()
+            coins += 6
+            if (inHosp && pet.home && pet.home !== pet.level) {
+              returnHomeAfterHeal(set, get, pet.id, pet.home)
+            }
+          }
           break
       }
 
@@ -927,6 +1038,52 @@ export const useStudio = create<StudioState>((set, get) => {
       set({ pets: { ...newPets, [pet.id]: rt }, coins, actionCd })
     },
 
+    /** llevar en ambulancia a la mascota herida/enferma al hospital (requiere desbloquearlo) */
+    sendToHospital: (id) => {
+      const s = get()
+      if (s.mode !== 'play') return
+      const pet = s.objects.find((o) => o.id === id && isPetObj(o))
+      if (!pet) return
+      const rt0 = s.pets[id]
+      if (!rt0) return
+      if (!s.unlockedLevels.includes('hospital')) {
+        toast('🔒 El hospital está cerrado. Desbloquéalo en la barra de mundos (120 🪙)', {
+          duration: 4500,
+        })
+        sfx.sad()
+        return
+      }
+      const now = Date.now()
+      const objects = s.objects.map((o) =>
+        o.id === id ? { ...o, level: 'hospital' as LevelId, home: o.home ?? o.level, x: rand(12, 32), y: rand(58, 78) } : o,
+      )
+      const rt: PetRuntime = {
+        ...rt0,
+        chaseUntil: 0,
+        chaseRole: null,
+        chasePartner: null,
+        hiding: null,
+        onTopOf: null,
+        obey: null,
+        state: 'idle',
+        targetKind: 'random',
+        wanderAt: now,
+      }
+      set({ objects, pets: { ...s.pets, [id]: rt } })
+      sfx.whoosh()
+      vib(70)
+      get().spawnParticles('🚑', pet.x, pet.y - 5, 2)
+      toast(`🚑 ¡Llevan a ${pet.name} al hospital! Viaja con él para acompañarlo`, {
+        duration: 4000,
+      })
+      // el dueño viaja con la mascota para verla curarse
+      setTimeout(() => {
+        const st = get()
+        if (st.mode === 'play' && !st.unlockedLevels.includes('hospital')) return
+        st.setLevel('hospital')
+      }, 1400)
+    },
+
     toggleBallMode: () => {
       const next = !get().ballPending
       set({ ballPending: next })
@@ -1048,6 +1205,12 @@ export const useStudio = create<StudioState>((set, get) => {
           continue
         }
 
+        // reposo (en la casita o en la camilla del hospital): quietecito
+        if (rt.state === 'rest') {
+          pets[obj.id] = rt
+          continue
+        }
+
         if (rt.state === 'eat') {
           if (now >= rt.eatUntil) {
             rt.stats = { ...rt.stats, comida: clamp(rt.stats.comida + 18) }
@@ -1113,6 +1276,10 @@ export const useStudio = create<StudioState>((set, get) => {
             sfx.treat()
             speak(set, get, obj, 'feliz')
           }
+          // ¿salió herido/a de la correteada? (pelea = más probable, escapar limpio = menos)
+          const fought = now - (rt.pairCd['pelea'] ?? 0) < 1500
+          const hurtChance = fought ? INJURY_FIGHT : escaped ? 0.12 : INJURY_CHASE
+          if (Math.random() < hurtChance) markInjured(set, get, obj, rt, fought)
         }
 
         // ===== ÓRDENES DEL DUEÑO: ¡sentado, quieto, ven, escondeos! =====
@@ -1216,6 +1383,25 @@ export const useStudio = create<StudioState>((set, get) => {
               } else {
                 rt.tx = partner.x
                 rt.ty = partner.y
+                // ¡lo alcanzó! pelea breve: 💥 y se sueltan (cada uno acaba su carrera)
+                if (
+                  Math.hypot(partner.x - obj.x, partner.y - obj.y) < 3.5 &&
+                  now - (rt.pairCd['pelea'] ?? 0) > 2200
+                ) {
+                  rt.pairCd['pelea'] = now
+                  rt.pairCd[`rival:${obj.id}:${partner.id}`] = now
+                  rt.chaseUntil = now
+                  get().spawnParticles('💥', obj.x, obj.y - 3, 3)
+                  vib([90, 40, 90])
+                  shakeUntil = Math.max(shakeUntil, now + 550)
+                  if (now - (rt.pairCd['peleaMsg'] ?? 0) > 5000) {
+                    rt.pairCd['peleaMsg'] = now
+                    toast(`💥 ¡${obj.name} alcanzó a ${partner.name}! ¡Se pelearon!`, {
+                      duration: 2800,
+                    })
+                    sfx.alarm()
+                  }
+                }
               }
             } else {
               // ¡huir cruzando TODA la pantalla, como en la vida real!
@@ -1254,6 +1440,24 @@ export const useStudio = create<StudioState>((set, get) => {
               if (Math.abs(dx) > 0.5) rt.facing = dx > 0 ? 1 : -1
               moved = true
             }
+            // ¡me pilló el rival! pelea breve (yo también la termino por mi lado)
+            if (
+              Math.hypot(partner.x - obj.x, partner.y - obj.y) < 3.5 &&
+              now - (rt.pairCd['pelea'] ?? 0) > 2200
+            ) {
+              rt.pairCd['pelea'] = now
+              rt.chaseUntil = now
+              // el depredador también se cansa de pelear (cooldown del par)
+              const prtF = pets[partner.id]
+              if (prtF) {
+                prtF.pairCd = {
+                  ...prtF.pairCd,
+                  [`rival:${partner.id}:${obj.id}`]: now,
+                }
+              }
+              get().spawnParticles('💥', obj.x, obj.y - 3, 2)
+              speak(set, get, obj, 'miedo')
+            }
             // ¿la presa alcanzó un escondite o trepadera? (tras 1.1 s de carrera)
             if (
               rt.chaseRole === 'flee' &&
@@ -1291,7 +1495,8 @@ export const useStudio = create<StudioState>((set, get) => {
         if (
           ball &&
           (obj.catalogId === 'dog' || obj.catalogId === 'fox') &&
-          !rt.chaseUntil
+          !rt.chaseUntil &&
+          !rt.injured
         ) {
           const dx = ball.x - obj.x
           const dy = ball.y - obj.y
@@ -1325,9 +1530,32 @@ export const useStudio = create<StudioState>((set, get) => {
           continue
         }
 
-        // decidir nuevo destino (con hambre, sueño, sed o refugio)
+        // decidir nuevo destino (herido→casa, hospital→reposo, hambre, sueño, sed o refugio)
         if (rt.state !== 'walk' && now >= rt.wanderAt) {
-          if (rt.stats.comida < 50 && food) {
+          // 🩹 herido/a (o enfermo/a en el hospital): ¡a la camilla/casita a descansar!
+          if (rt.injured || (rt.sick && s.currentLevel === 'hospital')) {
+            const spot =
+              s.currentLevel === 'hospital'
+                ? nearestBed(levelObjs, obj)
+                : nearestShelter(levelObjs, obj)
+            if (spot) {
+              rt.tx = spot.x
+              rt.ty = clampPct(spot.y + 4)
+              rt.targetKind = 'shelter'
+              rt.state = 'walk'
+            } else {
+              // sin casita/camilla cerca: descansa donde está
+              rt.state = 'rest'
+              rt.restUntil = now + 16000
+              rt.healAt = now + (s.currentLevel === 'hospital' ? HEAL_HOSPITAL_MS : HEAL_HOME_MS)
+            }
+          } else if (s.currentLevel === 'hospital' && bed && Math.random() < 0.55) {
+            // en el hospital todos pasan por la camilla a reposar un rato
+            rt.tx = bed.x
+            rt.ty = Math.min(95, bed.y + 6)
+            rt.targetKind = 'shelter'
+            rt.state = 'walk'
+          } else if (rt.stats.comida < 50 && food) {
             rt.tx = food.x
             rt.ty = Math.min(95, food.y + 6)
             rt.targetKind = 'food'
@@ -1370,7 +1598,8 @@ export const useStudio = create<StudioState>((set, get) => {
           const dx = rt.tx - obj.x
           const dy = rt.ty - obj.y
           const dist = Math.hypot(dx, dy)
-          const step = (obj.speed ?? 8) * dt
+          // herido/a cojea: la mitad de velocidad
+          const step = (obj.speed ?? 8) * dt * (rt.injured ? 0.45 : 1)
           if (dist <= Math.max(1.5, step)) {
             if (rt.targetKind === 'food') {
               rt.state = 'eat'
@@ -1380,6 +1609,17 @@ export const useStudio = create<StudioState>((set, get) => {
               rt.drinkUntil = now + 1700
             } else if (rt.targetKind === 'bed') {
               rt.state = 'sleep'
+            } else if (rt.targetKind === 'shelter') {
+              // ¡llegó a la casita/camilla! se pone en reposo
+              rt.state = 'rest'
+              const inHosp = s.currentLevel === 'hospital'
+              rt.restUntil = now + (inHosp ? HEAL_HOSPITAL_MS : 16000)
+              rt.healAt =
+                rt.injured || rt.sick
+                  ? now + (inHosp ? HEAL_HOSPITAL_MS : HEAL_HOME_MS)
+                  : 0
+              sfx.pop()
+              get().spawnParticles('💤', obj.x, obj.y - 4, 1)
             } else {
               rt.state = 'idle'
               rt.wanderAt = now + rand(1500, 4500)
@@ -1425,7 +1665,9 @@ export const useStudio = create<StudioState>((set, get) => {
         pets[obj.id] = rt
       }
 
-      // ===== ¡RIVALES CERCA! → empieza la persecución (vibra y tiembla) =====
+      // ===== ¡RIVALES CERCA! → persecución (vibra y tiembla) =====
+      // en el HOSPITAL nadie pelea: es una zona segura de reposo
+      if (s.currentLevel !== 'hospital') {
       for (const pred of petObjs) {
         const preys = RIVALS[pred.catalogId]
         if (!preys) continue
@@ -1433,10 +1675,12 @@ export const useStudio = create<StudioState>((set, get) => {
         if (
           !prt ||
           prt.state === 'sleep' ||
+          prt.state === 'rest' ||
           prt.state === 'eat' ||
           prt.chaseUntil > now ||
           prt.obey ||
           prt.sick ||
+          prt.injured ||
           prt.stats.energia < 12
         )
           continue
@@ -1446,10 +1690,12 @@ export const useStudio = create<StudioState>((set, get) => {
           if (
             !yrt ||
             yrt.state === 'sleep' ||
+            yrt.state === 'rest' ||
             yrt.state === 'eat' ||
             yrt.chaseUntil > now ||
             yrt.obey ||
             yrt.sick ||
+            yrt.injured ||
             yrt.hiding ||
             yrt.onTopOf
           )
@@ -1478,6 +1724,7 @@ export const useStudio = create<StudioState>((set, get) => {
           toast(`😈 ¡${pred.name} persigue a ${prey.name}!`, { duration: 3000 })
           break
         }
+      }
       }
 
       // reglas del tipo "CUANDO se acerque a..." (misma mascota y mismo mundo)
@@ -1550,7 +1797,7 @@ export const useStudio = create<StudioState>((set, get) => {
         event = null
         nextEventAt = now + rand(45000, 85000)
       }
-      if (!event && now >= nextEventAt && activePets.length > 0) {
+      if (!event && now >= nextEventAt && activePets.length > 0 && s.currentLevel !== 'hospital') {
         const kinds: EventKind[] = ['lluvia', 'escasez', 'mariposa', 'regalo']
         const kind = kinds[Math.floor(Math.random() * kinds.length)]
         const info = EVENT_INFO[kind]
@@ -1597,6 +1844,40 @@ export const useStudio = create<StudioState>((set, get) => {
             sfx.wake()
           }
           if (Math.random() < 0.35) get().spawnParticles('💤', obj.x, obj.y - 5, 1)
+        } else if (rt.state === 'rest') {
+          // ===== REPOSO: en el hospital se cura rápido; en casa, lento =====
+          rt.stats.descanso = clamp(rt.stats.descanso + 2)
+          rt.stats.energia = clamp(rt.stats.energia + 1.4)
+          rt.stats.comida = clamp(rt.stats.comida - 0.12)
+          rt.stats.felicidad = clamp(rt.stats.felicidad + 0.35)
+          rt.stats.higiene = clamp(rt.stats.higiene + 0.25)
+          if (Math.random() < 0.3) {
+            get().spawnParticles(rt.injured || rt.sick ? '❤️‍🩹' : '💤', obj.x, obj.y - 5, 1)
+          }
+          const healDue = (rt.injured || rt.sick) && now >= rt.healAt
+          const restOver = !rt.injured && !rt.sick && now >= rt.restUntil
+          if (healDue || restOver) {
+            const inHosp = obj.level === 'hospital' && obj.home && obj.home !== obj.level
+            rt.injured = false
+            rt.sick = false
+            rt.state = 'idle'
+            rt.wanderAt = now
+            get().spawnParticles('✨', obj.x, obj.y - 4, 2)
+            get().spawnParticles('🎉', obj.x, obj.y - 7, 2)
+            sfx.happy()
+            speak(set, get, obj, 'feliz')
+            const lvHeal = gainXp(rt, 8)
+            if (lvHeal) {
+              coins += 10
+              celebrateLevel(set, get, obj, lvHeal)
+            }
+            if (healDue) {
+              toast(inHosp ? `❤️‍🩹 ¡${obj.name} se curó en el hospital!` : `❤️‍🩹 ¡${obj.name} se curó descansando en casa!`, {
+                duration: 3500,
+              })
+              if (inHosp) returnHomeAfterHeal(set, get, obj.id, obj.home ?? 'jardin')
+            }
+          }
         } else {
           rt.stats.comida = clamp(
             rt.stats.comida - 0.7 - (hungryDays ? 0.6 : 0) - (running ? 0.4 : 0),
