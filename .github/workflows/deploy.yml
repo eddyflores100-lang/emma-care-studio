@@ -26,9 +26,21 @@ jobs:
 
       - name: Instalar Bun
         uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
 
       - name: Instalar dependencias
         run: bun install --frozen-lockfile
+
+      - name: Verificar juego antes de publicar
+        run: |
+          bun run test
+          bun run typecheck
+          bun run lint
 
       - name: Compilar versión estática
         run: bun run build:export

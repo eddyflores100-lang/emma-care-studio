@@ -282,6 +282,7 @@ export function WorldCanvas() {
         return (
           <div
             key={obj.id}
+            data-object-id={obj.id}
             className={cn(
               'pop-in absolute touch-none',
               mode === 'edit'
@@ -316,7 +317,8 @@ export function WorldCanvas() {
               <span
                 className={cn(
                   'block drop-shadow-lg transition-transform',
-                  chasing && 'pet-hop',
+                  (chasing || rt?.obey?.cmd === 'run' || rt?.obey?.cmd === 'jump') && 'pet-hop',
+                  rt?.obey?.cmd === 'dance' && 'pet-dance',
                   rt?.injured && rt.state === 'walk' && 'pet-limp',
                 )}
                 style={{
@@ -391,13 +393,13 @@ export function WorldCanvas() {
               </span>
             )}
             {/* globo de petición de cuidado */}
-            {bubble && (
+            {bubble && !voiceText && (
               <span className="absolute -top-7 left-1/2 -translate-x-1/2 animate-bounce rounded-full bg-white px-2 py-0.5 text-sm font-black shadow-md">
                 {bubble}
               </span>
             )}
             {/* globo de voz: ¡Guau!, ¡Miau... (acompaña al sonido) */}
-            {voiceText && !bubble && (
+            {voiceText && (
               <span
                 className="say-pop absolute -top-8 left-1/2 -translate-x-1/2 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-xs font-black whitespace-nowrap text-slate-700 shadow-md"
                 aria-hidden

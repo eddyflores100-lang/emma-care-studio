@@ -48,16 +48,14 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
 
   // el dock (y cualquier parte) puede abrir la mochila con un evento
   useEffect(() => {
-    const onOpen = () => setOpen(true)
+    const onOpen = (event: Event) => {
+      setOpen(true)
+      const section = (event as CustomEvent<{section?:string}>).detail?.section
+      if (section) setSec(section)
+    }
     window.addEventListener('emma-drawer-open', onOpen)
     return () => window.removeEventListener('emma-drawer-open', onOpen)
   }, [])
-
-  // al cambiar de modo, sección inicial coherente
-  useEffect(() => {
-    setSec(mode === 'edit' ? 'objetos' : 'estado')
-    setOpen(false)
-  }, [mode])
 
   const pets = objects.filter(
     (o) => catalogById[o.catalogId]?.kind === 'pet' && o.level === currentLevel,
@@ -205,9 +203,14 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
             <p className="mb-1 font-black text-sky-700">🎙️ Prueba a decirle:</p>
             <p>«¡Quietos!» — dejan de pelear al instante</p>
             <p>«¡Max!» — contesta y viene hacia ti</p>
-            <p>«Max a la casa» — camina hasta la casita</p>
+            <p>«Max a la casa» — viaja al mundo Casa desbloqueado</p>
             <p>«¡Escondeos!» — buscan refugio</p>
-            <p>«a comer» · «a la cama» · «toma agua»</p>
+            <p>«{sel?.name ?? 'Max'} quieto» — solo esa mascota; «libre» para soltarla</p>
+            <p>«{sel?.name ?? 'Max'} a la playa» · «al patio» · «al hospital»</p>
+            <p>«a comer» · «a la cama» · «toma agua» · «báñate»</p>
+            <p>«corre» · «pasea» · «salta» · «baila»</p>
+            <p>«descansa» · «despierta» · «libre»</p>
+            <p>Usa el nombre para ordenar a una; sin nombre, a las de este mundo.</p>
           </div>
         </div>
       ),
@@ -243,9 +246,9 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
         </button>
       )}
 
-      {open && <div className="emma-drawer-back" onClick={() => setOpen(false)} aria-hidden />}
+      {open && mode === 'play' && <div className="emma-drawer-back" onClick={() => setOpen(false)} aria-hidden />}
 
-      <aside className={cn('emma-drawer', open && 'emma-drawer-open')} aria-hidden={!open}>
+      <aside className={cn('emma-drawer', open && 'emma-drawer-open')} aria-hidden={!open} inert={!open}>
         <header>
           <span className="flex items-center gap-1.5">
             {mode === 'edit' ? '🧰 Herramientas' : '🎒 Mochila'}
@@ -280,7 +283,7 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
 
           {mode === 'play' && (
             <p className="px-1 pt-1 text-center text-[10px] font-bold text-slate-400">
-              💡 Gana 🪙 cuidando y obedeciendo órdenes de voz
+              💡 Gana 🪙 cuidando a tus mascotas
             </p>
           )}
         </div>

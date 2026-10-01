@@ -6,6 +6,36 @@
 
 ---
 
+## v0.8.1 — voz y partidas reparadas
+
+- Llama por el **nombre que hayas puesto**: «Max» responde con el sonido de su especie y un globo; «Max ven» viene hacia ti.
+- «Max quieto» solo detiene a Max hasta decir «Max libre» o darle otra orden. «Quietos» separa a los rivales y cancela la pelea sin causar una herida adicional.
+- «Max a la casa» cambia su ubicación al **mundo Casa**. También: «al patio», «a la playa», «al hospital». Debes desbloquear primero el destino; la voz no gasta monedas. Al abrir el mundo, encontrarás allí a quienes enviaste.
+- «A la casita» busca el objeto casita del mundo actual; se distingue del viaje al mundo Casa.
+- Los nombres se leen de la configuración en cada orden: al renombrar a Edgar como Lucía, responde inmediatamente a Lucía. Los nombres de varias palabras y con tildes también funcionan.
+- Sonidos adicionales al viajar, saltar, bailar, beber y bañarse; respetan el botón de silencio.
+- Nuevas órdenes: **corre, pasea, salta, baila, libre, descansa, despierta, báñate**; además de comer, beber, dormir y esconderse.
+- Las órdenes se ejecutan al terminar la frase. Las alternativas del reconocimiento no ejecutan varias órdenes simultáneamente.
+- En móvil, tocar un objeto abre sus ajustes; la mochila desplaza todas sus secciones sin recortar propiedades ni reglas.
+- Mientras juegas, solicita **Screen Wake Lock** para mantener la pantalla despierta. Lo libera al editar/salir y lo solicita de nuevo al volver a la pestaña; el sistema puede rechazarlo por ahorro de batería o falta de soporte.
+- La voz requiere permiso de micrófono y soporte Web Speech del navegador; puede usar el servicio de reconocimiento del navegador y necesitar conexión. No se garantiza reconocimiento en todos los dispositivos. El botón ⌨️ permite escribir las mismas órdenes.
+- **Guardado v3** conserva nivel, XP, necesidades, heridas y ubicación. Los archivos v1/v2 migran; no pueden recuperar progreso que esas versiones nunca guardaron.
+- 📂 permite **descargar, importar y recuperar el mundo anterior**. «Nuevo mundo» y la importación crean una copia previa; si no hay espacio para esa copia, conservan el mundo actual.
+- El autoguardado ocurre como máximo 1,2 s después del primer cambio pendiente, aunque las mascotas sigan moviéndose. Si falla, muestra un aviso.
+- Las persecuciones cruzan el campo, activan temblor visual y vibración en dispositivos compatibles. Las mascotas se cansan, reducen velocidad y paran cuando les falta energía. El hospital es una zona segura.
+
+### Verificación
+
+```bash
+bun install --frozen-lockfile
+bun run test        # pruebas de comandos, viajes, progreso, importación y autoguardado
+bun run typecheck
+bun run lint
+bun run build:export
+```
+
+El despliegue exige esas comprobaciones. También se ejecutan en las pull requests. Los ejemplos de WebSocket y el helper de Prisma del proyecto inicial no forman parte de la aplicación estática y quedan fuera de su comprobación de tipos.
+
 ## ✨ ¿Qué se puede hacer?
 
 ### 🛠️ Modo EDITAR
@@ -98,7 +128,8 @@ bun run build:export   # build estático para Pages (carpeta out/)
 - **v0.5** — ✅ Autoguardado automático + publicación en GitHub Pages
 - **v0.6** — ✅ Heridas tras peleas, hospital zona segura con reposo y curación, ambulancia 🚑
 - **v0.7** — ✅ Órdenes por voz 🎙️, pantalla completa ⛶, modo horizontal para móvil y alertas compactas
-- **v0.8** — Exportar el mundo a Roblox Studio (JSON → Lua)
+- **v0.8.1** — ✅ Comandos dirigidos, viajes entre mundos, progreso persistente y recuperación de partidas
+- **Futuro** — Exportar el mundo a Roblox Studio (JSON → Lua)
 - **v0.9** — Biblioteca de sonidos y sprites propios
 - **v1.0** — Asistente IA que construye el mundo contándole un cuento
 

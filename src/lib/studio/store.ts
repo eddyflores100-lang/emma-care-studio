@@ -38,7 +38,7 @@ import {
 import { petVoice, setMuted, sfx } from './sound'
 import { parseVoiceCommand, type VoiceOutcome } from './voice'
 
-const SAVE_KEY = 'emma-care-studio-v1'
+import { SAVE_KEY, BACKUP_KEY, decodeProject, snapshotProject } from './persistence'
 
 const clamp = (v: number) => Math.max(0, Math.min(100, v))
 const clampPct = (v: number) => Math.max(3, Math.min(97, v))
@@ -133,6 +133,26 @@ function makeRuntime(): PetRuntime {
     onTopOf: null,
     obey: null,
   }
+}
+
+function projectState(data: SavedProject): Partial<StudioState> {
+  const now = Date.now()
+  const pets: Record<string, PetRuntime> = {}
+  for (const obj of data.objects.filter(isPetObj)) {
+    const saved = data.pets?.[obj.id]
+    const rt = makeRuntime()
+    if (saved) {
+      Object.assign(rt, { stats: { ...saved.stats }, lvl: saved.lvl, xp: saved.xp,
+        injured: saved.injured, sick: saved.sick, state: saved.state,
+        healAt: now + saved.healRemaining, restUntil: now + saved.restRemaining,
+        obey: saved.hold ? {cmd:saved.hold.cmd,until:saved.hold.remaining === null ? Infinity : now + saved.hold.remaining}
+          : saved.stay ? { cmd: 'stay', until: Infinity } : null })
+    }
+    rt.tx = obj.x; rt.ty = obj.y
+    pets[obj.id] = rt
+  }
+  return { objects: data.objects, rules: data.rules, coins: data.coins, pets,
+    unlockedLevels: data.unlockedLevels ?? ['jardin'], currentLevel: data.currentLevel ?? 'jardin' }
 }
 
 /** Ánimo actual de una mascota: decide su voz y su cara */
@@ -246,7 +266,7 @@ function returnHomeAfterHeal(set: StoreSet, get: StoreGet, petId: string, home: 
     const st = get()
     if (st.mode !== 'play') return
     const pet = st.objects.find((o) => o.id === petId)
-    if (!pet || pet.level === home) return
+    if (!pet || pet.level !== 'hospital' || pet.home !== home || !st.pets[petId] || st.pets[petId].injured) return
     set({
       objects: st.objects.map((o) => (o.id === petId ? { ...o, level: home } : o)),
       pets: {
@@ -297,6 +317,7 @@ interface StudioState {
   // ===== autoguardado =====
   /** momento del último autoguardado (0 = aún no) — para el indicador ✓ */
   lastSavedAt: number
+  saveError: boolean
 
   hydrate: () => void
   addObject: (catalogId: string, x?: number, y?: number) => void
@@ -315,8 +336,10 @@ interface StudioState {
   removeRule: (id: string) => void
   saveProject: () => void
   /** autoguardado silencioso: igual que guardar pero sin toast (lo dispara el juego) */
-  saveSilent: () => void
+  saveSilent: () => boolean
   exportProject: () => void
+  importProject: (raw: string) => boolean
+  restoreBackup: () => boolean
   newProject: () => void
   toggleMute: () => void
   buyShopItem: (itemId: ShopItemId) => void
@@ -396,6 +419,7 @@ export const useStudio = create<StudioState>((set, get) => {
     ballPending: false,
     shakeUntil: 0,
     lastSavedAt: 0,
+    saveError: false,
 
     hydrate: () => {
       if (get().hydrated) return
@@ -403,27 +427,8 @@ export const useStudio = create<StudioState>((set, get) => {
       try {
         const raw = typeof window !== 'undefined' ? localStorage.getItem(SAVE_KEY) : null
         if (raw) {
-          const data = JSON.parse(raw) as SavedProject
-          const valid = data && Array.isArray(data.objects)
-          if (valid) {
-            // migración v1 → v2: los objetos sin mundo van al jardín
-            const objects = data.objects
-              .filter((o) => catalogById[o.catalogId])
-              .map((o) => ({ ...o, level: o.level ?? 'jardin' }))
-            const unlocked = (data.unlockedLevels ?? ['jardin']).filter((id) =>
-              LEVELS.some((l) => l.id === id),
-            )
-            next = {
-              objects,
-              rules: Array.isArray(data.rules) ? data.rules : [],
-              coins: typeof data.coins === 'number' ? data.coins : 0,
-              unlockedLevels: unlocked.length ? unlocked : ['jardin'],
-              currentLevel:
-                data.currentLevel && unlocked.includes(data.currentLevel)
-                  ? data.currentLevel
-                  : 'jardin',
-            }
-          }
+          const data = decodeProject(raw)
+          next = projectState(data)
         } else {
           setTimeout(() => {
             toast('👋 ¡Hola! Añade objetos, crea reglas mágicas y pulsa ▶️ ¡JUGAR!', {
@@ -432,7 +437,10 @@ export const useStudio = create<StudioState>((set, get) => {
           }, 700)
         }
       } catch {
-        // datos corruptos: se ignora y se usa el demo
+        // Keep malformed data available for recovery before any autosave.
+        try { const raw = localStorage.getItem(SAVE_KEY); if (raw) localStorage.setItem('emma-care-studio-corrupt', raw) } catch { /* blocked storage */ }
+        next.saveError = true
+        toast('No pude abrir la partida guardada. Conservé los datos para recuperarlos.')
       }
       setMuted(get().muted)
       set({ ...next, hydrated: true })
@@ -499,7 +507,11 @@ export const useStudio = create<StudioState>((set, get) => {
 
     select: (id) => set({ selectedId: id }),
 
-    selectForEdit: (id) => set({ selectedId: id, mobileTab: 'ajustes' }),
+    selectForEdit: (id) => {
+      set({ selectedId: id, mobileTab: 'ajustes' })
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function')
+        window.dispatchEvent(new CustomEvent('emma-drawer-open', { detail: { section: 'ajustes' } }))
+    },
 
     setMobileTab: (tab) => set({ mobileTab: tab }),
 
@@ -541,7 +553,7 @@ export const useStudio = create<StudioState>((set, get) => {
       const pets: Record<string, PetRuntime> = {}
       for (const o of s.objects) {
         if (isPetObj(o)) {
-          const rt = makeRuntime()
+          const rt = s.pets[o.id] ?? makeRuntime()
           // cada mascota empieza a "hablar" en un momento distinto
           rt.voiceAt = now + rand(1200, 6000)
           pets[o.id] = rt
@@ -580,9 +592,15 @@ export const useStudio = create<StudioState>((set, get) => {
     stopPlay: () => {
       // apagar el micrófono al salir del juego
       voiceEngine.stop()
+      const now = Date.now()
+      const pets = Object.fromEntries(Object.entries(get().pets).map(([id, rt]) => [id, {
+        ...rt, chaseUntil: 0, chaseRole: null, chasePartner: null, hiding: null, onTopOf: null,
+        goTo: null, obey: rt.obey?.until === Infinity ? rt.obey : null,
+        state: rt.state === 'sleep' || rt.state === 'rest' ? rt.state : 'idle', wanderAt: now,
+      }])) as Record<string, PetRuntime>
       set({
         mode: 'edit',
-        pets: {},
+        pets,
         particles: [],
         say: {},
         selectedId: null,
@@ -591,6 +609,7 @@ export const useStudio = create<StudioState>((set, get) => {
         ballPending: false,
         shakeUntil: 0,
       })
+      get().saveSilent()
     },
 
     addRule: () => {
@@ -620,84 +639,73 @@ export const useStudio = create<StudioState>((set, get) => {
     },
 
     saveProject: () => {
-      const s = get()
-      const data: SavedProject = {
-        version: 2,
-        objects: s.objects,
-        rules: s.rules,
-        coins: s.coins,
-        savedAt: new Date().toISOString(),
-        unlockedLevels: s.unlockedLevels,
-        currentLevel: s.currentLevel,
-      }
-      try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(data))
-        toast('💾 ¡Proyecto guardado!')
-        sfx.magic()
-      } catch {
-        toast('😅 No se pudo guardar el proyecto')
-      }
+      if (get().saveSilent()) { toast('💾 ¡Proyecto guardado!'); sfx.magic() }
+      else toast('No se pudo guardar. Descarga una copia de tu proyecto.')
     },
 
     saveSilent: () => {
-      const s = get()
-      const data: SavedProject = {
-        version: 2,
-        objects: s.objects,
-        rules: s.rules,
-        coins: s.coins,
-        savedAt: new Date().toISOString(),
-        unlockedLevels: s.unlockedLevels,
-        currentLevel: s.currentLevel,
-      }
+      if (!get().hydrated) return false
       try {
-        localStorage.setItem(SAVE_KEY, JSON.stringify(data))
-        set({ lastSavedAt: Date.now() })
+        localStorage.setItem(SAVE_KEY, JSON.stringify(snapshotProject(get())))
+        set({ lastSavedAt: Date.now(), saveError: false })
+        return true
       } catch {
-        // almacenamiento lleno o bloqueado: se reintenta en el próximo cambio
+        const wasError = get().saveError
+        set({ saveError: true })
+        if (!wasError) toast('No se pudo autoguardar. Descarga una copia para conservar tu mundo.')
+        return false
       }
     },
 
     exportProject: () => {
-      const s = get()
-      const data: SavedProject = {
-        version: 2,
-        objects: s.objects,
-        rules: s.rules,
-        coins: s.coins,
-        savedAt: new Date().toISOString(),
-        unlockedLevels: s.unlockedLevels,
-        currentLevel: s.currentLevel,
-      }
       try {
-        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+        const blob = new Blob([JSON.stringify(snapshotProject(get()), null, 2)], { type: 'application/json' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
         a.download = 'emma-care-proyecto.json'
         a.click()
-        URL.revokeObjectURL(url)
-        toast('⬇️ ¡Proyecto descargado en JSON!')
-      } catch {
-        toast('😅 No se pudo descargar')
-      }
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
+        toast('⬇️ ¡Proyecto descargado! Puedes abrirlo aquí con Importar.')
+      } catch { toast('No se pudo descargar el proyecto') }
+    },
+
+    importProject: (raw) => {
+      try {
+        const data = decodeProject(raw)
+        const next = projectState(data)
+        // Validate everything and secure a backup before mutating the game.
+        localStorage.setItem(BACKUP_KEY, JSON.stringify(snapshotProject(get())))
+        localStorage.setItem(SAVE_KEY, JSON.stringify(data))
+        voiceEngine.stop()
+        set({ ...next, hydrated: true, mode: 'edit', selectedId: null, particles: [],
+          say: {}, ruleAcc: {}, actionCd: {}, ball: null, ballPending: false,
+          event: null, shakeUntil: 0, lastSavedAt: Date.now(), saveError: false })
+        toast('📂 ¡Mundo recuperado! Tu progreso y tus mascotas están aquí.')
+        return true
+      } catch { toast('No se pudo abrir el archivo. Tu mundo actual se conserva.'); return false }
+    },
+
+    restoreBackup: () => {
+      try {
+        const raw = localStorage.getItem(BACKUP_KEY)
+        if (raw) return get().importProject(raw)
+      } catch { /* blocked storage */ }
+      toast('Todavía no hay una copia anterior para recuperar')
+      return false
     },
 
     newProject: () => {
+      try { localStorage.setItem(BACKUP_KEY, JSON.stringify(snapshotProject(get()))) }
+      catch { toast('No pude crear la copia anterior. Conservé tu mundo actual.'); return }
+      voiceEngine.stop()
       const blank = makeBlankProject()
-      set({
-        objects: blank.objects,
-        rules: blank.rules,
-        coins: 0,
-        selectedId: null,
-        pets: {},
-        particles: [],
-        say: {},
-        mode: 'edit',
-        currentLevel: 'jardin',
-        unlockedLevels: ['jardin'],
-      })
-      toast('🆕 ¡Mundo nuevo! Construye tu juego ✨')
+      set({ objects: blank.objects, rules: blank.rules, coins: 0, selectedId: null,
+        pets: {}, particles: [], say: {}, mode: 'edit', currentLevel: 'jardin',
+        unlockedLevels: ['jardin'], event: null, ball: null, ballPending: false,
+        ruleAcc: {}, actionCd: {}, shakeUntil: 0 })
+      get().saveSilent()
+      toast('🆕 ¡Mundo nuevo! Puedes recuperar el anterior con ↩️ Recuperar.')
       sfx.magic()
     },
 
@@ -1196,269 +1204,148 @@ export const useStudio = create<StudioState>((set, get) => {
     voiceCommand: (raw) => {
       const s = get()
       const now = Date.now()
-      if (s.mode !== 'play') {
-        toast('▶️ Primero pulsa ¡JUGAR! y luego háblales: ¡Quietos! ¡Escondeos! ¡Ven! 🎙️', {
-          id: 'voice-noplay',
-          duration: 2800,
-        })
-        return 'noplay'
-      }
-      const allPets = s.objects.filter((o) => isPetObj(o) && o.level === s.currentLevel)
+      if (s.mode !== 'play') return 'noplay'
+      const allPets = s.objects.filter(isPetObj)
+      const visible = allPets.filter(o => o.level === s.currentLevel)
       const parsed = parseVoiceCommand(raw, allPets)
-      if (!parsed) {
-        if (now - (s.actionCd['voice:unknown'] ?? 0) > 3200) {
-          set({ actionCd: { ...s.actionCd, 'voice:unknown': now } })
-          toast(
-            '🤔 No entendí. Di: ¡Quietos! · ¡Escondeos! · ¡Ven! · ¡Sentado! · su nombre · pelota',
-            { id: 'voice-unknown', duration: 3200 },
-          )
-        }
-        return 'unknown'
+      if (!parsed) return 'unknown'
+      const { kind, named, matchedName, dest, level } = parsed
+      const targets = named.length ? named : visible
+      if (!targets.length) return 'unknown'
+      const cdKey = `voice:${kind}:${dest ?? level ?? ''}:${targets.map(p => p.id).sort().join(',')}`
+      if (now - (s.actionCd[cdKey] ?? 0) < 700) return 'ok'
+      const actionCd = { ...s.actionCd, [cdKey]: now }
+      const objects = s.objects.map(o => ({ ...o }))
+      const pets = Object.fromEntries(Object.entries(s.pets).map(([id, rt]) =>
+        [id, { ...rt, stats: { ...rt.stats }, pairCd: { ...rt.pairCd } }]))
+      const answer = (p: WorldObject, text: string) => {
+        speak(set, get, p, 'normal')
+        set({ say: { ...get().say, [p.id]: { text: `${VOICES[p.catalogId]?.normal ?? '🐾'} ${text}`, until: now + 4000 } } })
       }
-      const { kind, named, matchedName, dest } = parsed
-
-      // anti-repetición (la escucha provisional dispara varias veces igual):
-      // cada orden y mascota tiene sus segundos mínimos entre disparos
-      const gap =
-        kind === 'hospital'
-          ? 5000
-          : kind === 'ball'
-            ? 4500
-            : kind === 'hide' || kind === 'goto'
-              ? 4000
-              : 3000
-      const cdKey = `voice:${kind}:${matchedName ?? 'todos'}`
-      if (now - (s.actionCd[cdKey] ?? 0) < gap) return 'ok'
-      const actionCd = { ...s.actionCd, [cdKey]: now, 'voice:unknown': now }
-      const label = matchedName ?? 'todos'
-      const pets = { ...s.pets }
-      const spawn = get().spawnParticles
-      // las que reposan (hospital/cama) no se levantan: ¡están curándose!
-      const disponibles = (named.length ? named : allPets).filter((p) => {
-        const rt = s.pets[p.id]
-        return rt && rt.state !== 'rest'
-      })
-
-      // ===== ¡QUIETOS! — se acaban TODAS las peleas y todos se congelan =====
-      if (kind === 'calm') {
-        // OJO: PetRuntime no tiene campo id — la clave del mapa ES el id
-        const chasing = Object.entries(pets).filter(([, rt]) => rt.chaseUntil > now)
-        for (const [petId, rt] of chasing) {
-          if (rt.chasePartner) {
-            const predId = rt.chaseRole === 'chase' ? petId : rt.chasePartner
-            const preyId = rt.chaseRole === 'chase' ? rt.chasePartner : petId
-            const prt = pets[predId]
-            if (prt)
-              pets[predId] = {
-                ...prt,
-                pairCd: { ...prt.pairCd, [`rival:${predId}:${preyId}`]: now },
-              }
-          }
-          pets[petId] = { ...rt, chaseUntil: now }
-        }
-        for (const p of allPets) {
-          const rt = pets[p.id]
-          if (!rt) continue
-          pets[p.id] = {
-            ...rt,
-            obey: { cmd: 'stay', until: now + 5000 },
-            state: 'idle',
-            wanderAt: now + 8000,
-          }
-          spawn('✋', p.x, p.y - 4, 1)
-        }
-        set({ pets, shakeUntil: 0, actionCd })
-        sfx.happy()
-        toast(`🎙️ ¡Quietos, ${label}! Se acabó la pelea, todos quietecitos 💙`, { duration: 2600 })
-        return 'ok'
-      }
-
-      // ===== "¡MAX A LA CASA!" — caminar hasta un lugar del mundo =====
-      if (kind === 'goto' && dest) {
-        set({ actionCd })
-        const lvlObjs = s.objects.filter((o) => o.level === s.currentLevel)
-        const ref = (named[0] ?? disponibles[0] ?? allPets[0]) as WorldObject | undefined
-        let spot: { x: number; y: number } | null = null
-        if (dest === 'casa') {
-          // "casa" = la casita de verdad; si no hay, vale cualquier refugio
-          const casa = lvlObjs.find((o) => !isPetObj(o) && o.catalogId === 'house')
-          spot = casa ?? (ref ? nearestShelter(lvlObjs, ref) : null)
-        } else if (dest === 'cama') spot = findSpecial(lvlObjs, 'bed') ?? null
-        else if (dest === 'agua') spot = findSpecial(lvlObjs, 'water') ?? null
-        else spot = findSpecial(lvlObjs, 'food') ?? null
-        if (!spot) {
-          toast(
-            dest === 'casa'
-              ? '🏠 Aún no hay casita en este mundo… añádela en ✏️ Editar'
-              : '🤔 No encontré ese lugar en este mundo',
-            { duration: 3200 },
-          )
-          return 'ok'
-        }
-        const grupo = named.length ? named : disponibles
-        if (!grupo.length) {
-          toast('😴 Todas están reposando… las escucharán al despertar', { duration: 2800 })
-          return 'ok'
-        }
-        for (const p of grupo) {
-          const rt0 = pets[p.id]
-          if (!rt0) continue
-          const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
-          // si estaba en una pelea, se acaba: ¡tiene una misión!
-          if (rt.chaseUntil > now && rt.chasePartner) {
-            const partner = s.objects.find((o) => o.id === rt.chasePartner)
-            const prt = partner ? pets[partner.id] : null
-            rt.chaseUntil = 0
-            rt.chaseRole = null
-            rt.chasePartner = null
-            rt.hiding = null
-            rt.onTopOf = null
-            if (partner && prt) {
-              pets[partner.id] = {
-                ...prt,
-                chaseUntil: 0,
-                chaseRole: null,
-                chasePartner: null,
-                hiding: null,
-                onTopOf: null,
-                pairCd: { ...prt.pairCd, [`rival:${partner.id}:${p.id}`]: now },
-              }
-              speak(set, get, partner, 'triste')
+      // Stop both sides directly. Marking chaseUntil=now incorrectly ran
+      // the normal end-of-fight path and could injure obedient pets.
+      const cancelChase = (id: string, separate = false) => {
+        const rt = pets[id]
+        if (!rt) return
+        const partnerId = rt.chasePartner
+        const partner = partnerId ? pets[partnerId] : null
+        if (partner && partnerId) {
+          rt.pairCd[`rival:${id}:${partnerId}`] = now
+          partner.pairCd[`rival:${partnerId}:${id}`] = now
+          partner.chaseUntil = 0; partner.chaseRole = null; partner.chasePartner = null
+          partner.hiding = null; partner.onTopOf = null
+          partner.state = 'idle'; partner.goTo = null
+          partner.obey = { cmd: 'stay', until: now + 5000 }
+          if (separate) {
+            const a = objects.find(o => o.id === id), b = objects.find(o => o.id === partnerId)
+            if (a && b && a.level === b.level) {
+              const center = Math.max(10, Math.min(90, (a.x + b.x) / 2))
+              const left = a.x <= b.x
+              a.x = center + (left ? -7 : 7); b.x = center + (left ? 7 : -7)
             }
           }
-          rt.state = 'walk'
-          rt.tx = spot.x
-          rt.ty = clampPct(spot.y + 5)
-          rt.targetKind = 'goto'
-          rt.goTo = { dest, until: now + 25000 }
-          rt.wanderAt = now + 25000
-          rt.obey = null
-          spawn('👉', p.x, p.y - 4, 1)
-          speak(set, get, p, 'normal')
-          pets[p.id] = rt
         }
-        sfx.treat()
-        vib(40)
-        const hacia: Record<string, string> = {
-          casa: 'a la casita 🏠',
-          cama: 'a la cama 🛏️',
-          agua: 'a tomar agua 💧',
-          comida: 'a comer 🥣',
+        rt.chaseUntil = 0; rt.chaseRole = null; rt.chasePartner = null
+        rt.hiding = null; rt.onTopOf = null; rt.hideSpot = null
+      }
+      const transfer = (p: WorldObject, destination: LevelId) => {
+        const obj = objects.find(o => o.id === p.id)!
+        const rt = pets[p.id]
+        if (!rt) return
+        cancelChase(p.id)
+        const origin = obj.level
+        obj.level = destination
+        // Healthy visitors remain in the hospital. Medical patients return
+        // to their origin after healing; an explicit later trip cancels that.
+        obj.home = destination === 'hospital' && (rt.injured || rt.sick)
+          ? origin === 'hospital' ? obj.home ?? 'jardin' : origin : destination
+        obj.x = clampPct(35 + (targets.indexOf(p) % 5) * 8); obj.y = 60
+        rt.goTo = null; rt.obey = null; rt.state = 'idle'; rt.wanderAt = now
+        rt.tx = obj.x; rt.ty = obj.y
+        if (destination === 'hospital' && (rt.injured || rt.sick)) {
+          rt.state = 'rest'; rt.healAt = now + HEAL_HOSPITAL_MS; rt.restUntil = rt.healAt
+          const bed = nearestBed(objects.filter(o => o.level === destination), obj)
+          if (bed) { obj.x = bed.x; obj.y = clampPct(bed.y + 4) }
         }
-        toast(`🎙️ ¡${label} va ${hacia[dest]}!`, { duration: 2800 })
-        set({ pets, actionCd })
+      }
+      if (kind === 'travel' && level) {
+        if (!s.unlockedLevels.includes(level)) {
+          for (const p of targets) answer(p, `El ${LEVELS.find(l => l.id === level)?.name} está cerrado 🔒`)
+          toast('🔒 Desbloquea primero ese mundo. La orden no gasta monedas.')
+          return 'ok'
+        }
+        for (const p of targets) {
+          transfer(p, level)
+          answer(p, `¡Estoy en ${LEVELS.find(l => l.id === level)?.name}!`)
+        }
+        set({ objects, pets, actionCd, shakeUntil: 0 })
+        get().saveSilent()
+        sfx.travel()
+        toast(`🐾 ${matchedName ?? 'Tus mascotas'}: viaje a ${LEVELS.find(l => l.id === level)?.name}`)
         return 'ok'
       }
-
-      // ===== PELOTA =====
       if (kind === 'ball') {
-        set({ actionCd })
-        get().toggleBallMode()
+        set({ actionCd, ballPending: true }); toast('🎾 Toca el mundo para lanzar la pelota')
         return 'ok'
       }
-
-      // ===== HOSPITAL (por voz: "Max al hospital", "traen la ambulancia") =====
-      if (kind === 'hospital') {
-        set({ actionCd })
-        const heridos = allPets.filter((p) => {
-          const rt = s.pets[p.id]
-          return rt && (rt.injured || rt.sick)
-        })
-        const elegido = named[0] ?? heridos.sort((a, b) => {
-          const ra = s.pets[a.id]
-          const rb = s.pets[b.id]
-          return (rb?.injured ? 1 : 0) - (ra?.injured ? 1 : 0)
-        })[0]
-        if (!elegido) {
-          toast('😊 Nadie necesita el hospital ahora mismo', { duration: 2600 })
-          return 'ok'
+      if (kind === 'jump') sfx.jump()
+      if (kind === 'dance') sfx.dance()
+      if (kind === 'wake') sfx.wake()
+      for (const p of targets) {
+        let obj = objects.find(o => o.id === p.id)!
+        const rt = pets[p.id]
+        if (!rt) continue
+        // Names can be called from any unlocked world. Other commands leave
+        // remote pets where they are, except an explicit travel order.
+        if (p.level !== s.currentLevel && (kind === 'come' || kind === 'call')) {
+          if (rt.injured && rt.state === 'rest') { answer(p, 'Estoy descansando para curarme 🩹'); continue }
+          transfer(p, s.currentLevel); obj = objects.find(o => o.id === p.id)!
         }
-        get().sendToHospital(elegido.id)
-        return 'ok'
+        if (kind === 'calm') {
+          const resting = rt.state === 'rest' || rt.state === 'sleep'
+          cancelChase(p.id, true)
+          if (!resting) { rt.state = 'idle'; rt.obey = { cmd: 'stay', until: Infinity } }
+          rt.goTo = null; rt.wanderAt = Infinity
+          answer(p, '¡Me quedo quieto! ✋ Di libre o ven para moverme.')
+          continue
+        }
+        if (rt.state === 'rest' && rt.injured) {
+          answer(p, '¡Aquí estoy! Descansando para curarme 🩹'); continue
+        }
+        if (kind === 'goto' && dest) {
+          const nearby = objects.filter(o => o.level === obj.level)
+          const spot = dest === 'casita' ? nearby.find(o => o.catalogId === 'house')
+            : findSpecial(nearby, dest === 'cama' ? 'bed' : dest === 'agua' ? 'water' : dest === 'bano' ? 'bath' : 'food')
+          if (!spot) { answer(p, 'No encuentro ese objeto aquí. Añádelo en Editar.'); continue }
+          cancelChase(p.id)
+          rt.obey = null; rt.goTo = { dest, until: now + 30000 }; rt.state = 'walk'; rt.wanderAt = now + 30000
+          rt.tx = spot.x; rt.ty = clampPct(spot.y + 4)
+          rt.targetKind = dest === 'cama' ? 'bed' : dest === 'agua' ? 'water' : dest === 'comida' ? 'food' : dest === 'casita' ? 'shelter' : 'random'
+          answer(p, `¡Voy ${dest === 'cama' ? 'a dormir' : dest === 'agua' ? 'a beber' : dest === 'comida' ? 'a comer' : dest === 'bano' ? 'a bañarme' : 'a la casita'}!`)
+          continue
+        }
+        cancelChase(p.id)
+        rt.goTo = null; rt.obey = null; rt.state = 'idle'; rt.wanderAt = now
+        if (kind === 'rest') {
+          rt.state = 'rest'; rt.restUntil = now + 16000
+          if (rt.injured || rt.sick) rt.healAt = now + (obj.level === 'hospital' ? HEAL_HOSPITAL_MS : HEAL_HOME_MS)
+          answer(p, '¡Voy a descansar! 💤')
+        } else if (kind === 'free' || kind === 'wake') {
+          if (rt.injured) { rt.state = 'rest'; answer(p, 'Todavía necesito reposo 🩹') }
+          else answer(p, kind === 'free' ? '¡Ya puedo moverme! 🐾' : '¡Ya desperté! ☀️')
+        } else {
+          const cmd: Command = kind === 'call' || kind === 'come' ? 'come' : kind === 'sit' ? 'sit'
+            : kind === 'hide' ? 'hide' : kind === 'run' ? 'run' : kind === 'walk' ? 'walk'
+            : kind === 'jump' ? 'jump' : 'dance'
+          rt.obey = { cmd, until: cmd === 'sit' ? Infinity : now + (cmd === 'come' ? 20000 : cmd === 'hide' ? 12000 : 8000) }
+          rt.wanderAt = now; rt.tx = obj.x < 50 ? 94 : 6; rt.ty = obj.y < 50 ? 92 : 8
+          answer(p, cmd === 'come' ? '¡Aquí voy! 🐾' : cmd === 'sit' ? '¡Me siento! 🪑'
+            : cmd === 'hide' ? '¡Me escondo! 🙈' : cmd === 'run' ? '¡A correr! 💨'
+            : cmd === 'walk' ? '¡De paseo! 🐾' : cmd === 'jump' ? '¡Salto! 🐾' : '¡A bailar! 🎵')
+        }
       }
-
-      // ===== ÓRDENES DE MOVIMIENTO A UN GRUPO (escondeos / ven / sentado) =====
-      let coins = s.coins
-      let alguna = false
-      for (const p of disponibles) {
-        const rt0 = pets[p.id]
-        if (!rt0) continue
-        alguna = true
-        const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
-        // la obediencia salva: si la están persiguiendo, se acaba la persecución
-        if (rt.chaseUntil > now && rt.chasePartner) {
-          const partner = s.objects.find((o) => o.id === rt.chasePartner)
-          const prt = partner ? pets[partner.id] : null
-          rt.chaseUntil = 0
-          rt.chaseRole = null
-          rt.chasePartner = null
-          rt.hiding = null
-          rt.onTopOf = null
-          if (partner && prt) {
-            pets[partner.id] = {
-              ...prt,
-              chaseUntil: 0,
-              chaseRole: null,
-              chasePartner: null,
-              hiding: null,
-              onTopOf: null,
-              pairCd: { ...prt.pairCd, [`rival:${partner.id}:${p.id}`]: now },
-            }
-            speak(set, get, partner, 'triste')
-          }
-        }
-        if (kind === 'hide') {
-          rt.obey = { cmd: 'hide', until: now + 7000 }
-          rt.hideSpot = null
-          rt.wanderAt = now + 9000
-        } else if (kind === 'come') {
-          rt.obey = { cmd: 'come', until: now + 8000 }
-          rt.wanderAt = now + 11000
-        } else if (kind === 'sit') {
-          rt.obey = { cmd: 'sit', until: now + 6000 }
-          rt.wanderAt = now + 8000
-        } else if (kind === 'call') {
-          rt.obey = { cmd: 'come', until: now + 8000 }
-          rt.wanderAt = now + 11000
-        }
-        rt.state = 'idle'
-        spawn(
-          kind === 'hide' ? '🙈' : kind === 'sit' ? '🪑' : '👉',
-          p.x,
-          p.y - 4,
-          1,
-        )
-        // premio por buen comportamiento SOLO si la nombraron (evita fábrica de monedas)
-        if (matchedName && !rt.sick) {
-          coins += 2
-          const lv = gainXp(rt, 6)
-          if (lv) {
-            coins += 10
-            celebrateLevel(set, get, p, lv)
-          }
-        }
-        // ¡contestan! su voz + un globito de respuesta
-        speak(set, get, p, kind === 'hide' ? 'normal' : 'feliz')
-        if (kind === 'call' || kind === 'come') {
-          set({ say: { ...get().say, [p.id]: { text: '¡Aquí voy! 🐾', until: now + 2400 } } })
-        }
-        pets[p.id] = rt
-      }
-      if (!alguna) {
-        toast('😴 Todas están reposando… las escucharán al despertar', { duration: 2800 })
-        set({ actionCd })
-        return 'ok'
-      }
-      set({ pets, coins, actionCd })
-      sfx.treat()
+      set({ objects, pets, actionCd, shakeUntil: kind === 'calm' ? 0 : s.shakeUntil })
       vib(40)
-      const msg =
-        kind === 'hide'
-          ? `🎙️ ¡Escondeos, ${label}! Corriendo a buscar refugio`
-          : kind === 'sit'
-            ? `🎙️ ¡Sentado, ${label}! Qué bien obedecen`
-            : `🎙️ ¡Ven, ${label}! Van corriendo hacia ti 🐾`
-      toast(msg, { duration: 2800 })
       return 'ok'
     },
 
@@ -1488,9 +1375,21 @@ export const useStudio = create<StudioState>((set, get) => {
       const ball = s.ball && s.ball.until > now ? s.ball : null
 
       for (const obj of petObjs) {
-        const rt0 = s.pets[obj.id]
+        const rt0 = pets[obj.id]
         if (!rt0) continue
-        const rt: PetRuntime = { ...rt0, pairCd: { ...rt0.pairCd } }
+        const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
+
+        if (rt.chaseUntil > now && rt.stats.energia < 12) {
+          const partnerId = rt.chasePartner
+          if (partnerId && pets[partnerId]) {
+            const partner = pets[partnerId]
+            pets[partnerId] = { ...partner, chaseUntil: 0, chaseRole: null, chasePartner: null,
+              state: 'idle', wanderAt: now, pairCd: { ...partner.pairCd, [`rival:${partnerId}:${obj.id}`]: now } }
+            rt.pairCd[`rival:${obj.id}:${partnerId}`] = now
+          }
+          rt.chaseUntil = 0; rt.chaseRole = null; rt.chasePartner = null
+          rt.state = 'idle'; rt.wanderAt = now
+        }
 
         if (rt.state === 'sleep') {
           pets[obj.id] = rt
@@ -1592,6 +1491,7 @@ export const useStudio = create<StudioState>((set, get) => {
             const step = (obj.speed ?? 8) * 1.7 * dt
             if (dist <= Math.max(1.5, step)) {
               rt.state = 'idle'
+              rt.obey = { cmd: 'stay', until: now + 2500 }
               rt.wanderAt = now + 2500
               get().spawnParticles('⭐', obj.x, obj.y - 4, 1)
             } else {
@@ -1600,6 +1500,22 @@ export const useStudio = create<StudioState>((set, get) => {
               if (Math.abs(dx) > 0.5) rt.facing = dx > 0 ? 1 : -1
               rt.state = 'walk'
               moved = true
+            }
+          } else if (rt.obey.cmd === 'run' || rt.obey.cmd === 'walk') {
+            const running = rt.obey.cmd === 'run'
+            if (running && rt.stats.energia < 12) {
+              rt.obey = null; rt.state = 'rest'; rt.restUntil = now + 8000
+            } else {
+              const dx = rt.tx - obj.x, dy = rt.ty - obj.y
+              const distance = Math.hypot(dx, dy)
+              const step = (obj.speed ?? 8) * (running ? 2.2 : 1) * dt
+              if (distance <= Math.max(step, 2)) {
+                rt.tx = obj.x < 50 ? rand(75, 95) : rand(5, 25)
+                rt.ty = obj.y < 50 ? rand(75, 95) : rand(5, 25)
+              } else {
+                obj.x = clampPct(obj.x + dx / distance * step); obj.y = clampPct(obj.y + dy / distance * step)
+                rt.facing = dx >= 0 ? 1 : -1; rt.state = 'walk'; moved = true
+              }
             }
           } else if (rt.obey.cmd === 'hide') {
             // ¡Escondeos!: corre al escondite/trepadera más cercano y se oculta
@@ -1715,8 +1631,8 @@ export const useStudio = create<StudioState>((set, get) => {
                     rt.tx = clampPct(partner.x + rand(-14, 14))
                     rt.ty = clampPct(partner.y + rand(-10, 10))
                   } else {
-                    rt.tx = obj.x < partner.x ? rand(58, 93) : rand(7, 42)
-                    rt.ty = obj.y < partner.y ? rand(58, 91) : rand(13, 50)
+                    rt.tx = obj.x < partner.x ? rand(5, 18) : rand(82, 95)
+                    rt.ty = obj.y < partner.y ? rand(5, 18) : rand(82, 95)
                   }
                 }
               }
@@ -1887,8 +1803,8 @@ export const useStudio = create<StudioState>((set, get) => {
             rt.targetKind = 'random'
             rt.state = 'walk'
           } else {
-            rt.tx = rand(8, 92)
-            rt.ty = rand(15, 92)
+            rt.tx = rand(5, 95)
+            rt.ty = rand(5, 95)
             rt.targetKind = 'random'
             rt.state = 'walk'
           }
@@ -1899,13 +1815,21 @@ export const useStudio = create<StudioState>((set, get) => {
           const dy = rt.ty - obj.y
           const dist = Math.hypot(dx, dy)
           // herido/a cojea: la mitad de velocidad
-          const step = (obj.speed ?? 8) * dt * (rt.injured ? 0.45 : 1)
+          const step = (obj.speed ?? 8) * dt * (rt.injured ? 0.45 : rt.stats.energia < 20 ? 0.65 : 1)
           if (dist <= Math.max(1.5, step)) {
-            if (rt.targetKind === 'food') {
+            const destination = rt.goTo?.dest
+            rt.goTo = null
+            if (destination === 'bano') {
+              sfx.water()
+              rt.stats.higiene = clamp(rt.stats.higiene + 30)
+              rt.state = 'idle'; rt.wanderAt = now + 3000
+              get().spawnParticles('🫧', obj.x, obj.y - 4, 2)
+            } else if (rt.targetKind === 'food') {
               rt.state = 'eat'
               rt.eatUntil = now + 1600
             } else if (rt.targetKind === 'water') {
               rt.state = 'drink'
+              sfx.water()
               rt.drinkUntil = now + 1700
             } else if (rt.targetKind === 'bed') {
               rt.state = 'sleep'
@@ -1920,32 +1844,6 @@ export const useStudio = create<StudioState>((set, get) => {
                   : 0
               sfx.pop()
               get().spawnParticles('💤', obj.x, obj.y - 4, 1)
-            } else if (rt.targetKind === 'goto' && rt.goTo) {
-              // ¡llegó al lugar que le dijeron por voz! premio por obedecer
-              const destEmoji =
-                rt.goTo.dest === 'casa'
-                  ? '🏠'
-                  : rt.goTo.dest === 'cama'
-                    ? '🛏️'
-                    : rt.goTo.dest === 'agua'
-                      ? '💧'
-                      : '🥣'
-              rt.goTo = null
-              rt.state = 'idle'
-              rt.wanderAt = now + 3000
-              if (!rt.sick && !rt.injured) {
-                coins += 2
-                const lvGo = gainXp(rt, 6)
-                if (lvGo) {
-                  coins += 10
-                  celebrateLevel(set, get, obj, lvGo)
-                }
-              }
-              get().spawnParticles(destEmoji, obj.x, obj.y - 4, 2)
-              get().spawnParticles('✨', obj.x, obj.y - 1, 1)
-              speak(set, get, obj, 'feliz')
-              toast(`🐾 ¡${obj.name} llegó! +2 🪙 por obedecer`, { duration: 2400 })
-              sfx.treat()
             } else {
               rt.state = 'idle'
               rt.wanderAt = now + rand(1500, 4500)
@@ -2005,6 +1903,7 @@ export const useStudio = create<StudioState>((set, get) => {
           prt.state === 'eat' ||
           prt.chaseUntil > now ||
           prt.obey ||
+          prt.goTo ||
           prt.sick ||
           prt.injured ||
           prt.stats.energia < 12
@@ -2020,6 +1919,8 @@ export const useStudio = create<StudioState>((set, get) => {
             yrt.state === 'eat' ||
             yrt.chaseUntil > now ||
             yrt.obey ||
+            yrt.goTo ||
+            yrt.stats.energia < 12 ||
             yrt.sick ||
             yrt.injured ||
             yrt.hiding ||
@@ -2039,7 +1940,9 @@ export const useStudio = create<StudioState>((set, get) => {
           yrt.chaseRole = 'flee'
           yrt.chasePartner = pred.id
           yrt.chaseUntil = now + CHASE_MS
-          yrt.fleeAt = 0
+          yrt.fleeAt = now + 500
+          yrt.tx = prey.x < pred.x ? rand(5, 15) : rand(85, 95)
+          yrt.ty = prey.y < pred.y ? rand(5, 15) : rand(85, 95)
           yrt.state = 'walk'
           shakeUntil = now + 1300
           vib([120, 60, 120, 60, 220])
@@ -2157,7 +2060,7 @@ export const useStudio = create<StudioState>((set, get) => {
       for (const obj of activePets) {
         const rt0 = s.pets[obj.id]
         const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats } }
-        const running = rt.chaseUntil > now // ¡corriendo en una persecución!
+        const running = rt.chaseUntil > now || rt.obey?.cmd === 'run' // ¡corriendo en una persecución!
 
         if (rt.state === 'sleep') {
           rt.stats.descanso = clamp(rt.stats.descanso + 2.5)

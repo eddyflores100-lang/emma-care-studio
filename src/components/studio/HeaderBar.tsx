@@ -4,7 +4,7 @@
 // (modo juego). También el botón grande ▶️ ¡JUGAR!, el micrófono de
 // pantalla completa ⛶ y el silenciador.
 
-import { useSyncExternalStore } from 'react'
+import { useRef, useSyncExternalStore } from 'react'
 import { useStudio } from '@/lib/studio/store'
 import { Button } from '@/components/ui/button'
 import {
@@ -28,6 +28,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { ShopItemId } from '@/lib/studio/types'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
+import { MAX_PROJECT_BYTES } from '@/lib/studio/persistence'
 
 function ShopDialog() {
   const coins = useStudio((s) => s.coins)
@@ -101,6 +103,10 @@ export function HeaderBar() {
   const mode = useStudio((s) => s.mode)
   const coins = useStudio((s) => s.coins)
   const muted = useStudio((s) => s.muted)
+  const saveError = useStudio(s => s.saveError)
+  const fileInput = useRef<HTMLInputElement>(null)
+  const importProject = useStudio(s => s.importProject)
+  const restoreBackup = useStudio(s => s.restoreBackup)
   const lastSavedAt = useStudio((s) => s.lastSavedAt)
   const startPlay = useStudio((s) => s.startPlay)
   const stopPlay = useStudio((s) => s.stopPlay)
@@ -133,7 +139,7 @@ export function HeaderBar() {
       if (!document.fullscreenElement) {
         await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
         try {
-          await screen.orientation?.lock?.('landscape')
+          await (screen.orientation as ScreenOrientation & { lock?: (orientation: string) => Promise<void> })?.lock?.('landscape')
         } catch {
           /* iOS/Safari sin lock: da igual, el juego funciona igual */
         }
@@ -163,7 +169,8 @@ export function HeaderBar() {
         <span className="hidden text-xs font-bold text-slate-400 lg:inline">
           {mode === 'edit' ? '✏️ editor de juegos para niños' : '🐾 modo juego'}
         </span>
-        {lastSavedAt > 0 && (
+        {saveError && <span className="text-xs font-bold text-rose-600" role="status">⚠️ Sin guardar</span>}
+        {lastSavedAt > 0 && !saveError && (
           <span
             key={lastSavedAt}
             className="emma-saved hidden rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-600 sm:inline"
@@ -193,7 +200,7 @@ export function HeaderBar() {
                     ¿Empezar un mundo nuevo?
                   </AlertDialogTitle>
                   <AlertDialogDescription>
-                    Se vaciará el editor (lo que guardaste antes con 💾 no se borra).
+                    Empezarás otro mundo. Conservaremos una copia del actual: puedes volver con 📂 → Recuperar anterior.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -210,15 +217,28 @@ export function HeaderBar() {
               </AlertDialogContent>
             </AlertDialog>
 
-            <Button
-              variant="ghost"
-              onClick={exportProject}
-              className="hidden rounded-full text-lg sm:inline-flex"
-              title="Descargar proyecto en JSON"
-              aria-label="Descargar proyecto"
-            >
-              ⬇️
-            </Button>
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" className="rounded-full text-lg" aria-label="Archivos del mundo" title="Abrir, descargar o recuperar mundo">📂</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm rounded-3xl">
+                <DialogHeader>
+                  <DialogTitle>📂 Tus mundos</DialogTitle>
+                  <DialogDescription>Guarda una copia para llevar tu mundo y su progreso a otro dispositivo.</DialogDescription>
+                </DialogHeader>
+                <input ref={fileInput} type="file" accept=".json,application/json" className="hidden" aria-label="Archivo del mundo"
+                  onChange={async e => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (!file) return
+                    if (file.size > MAX_PROJECT_BYTES) { toast('El archivo es demasiado grande (máximo 2 MB)'); return }
+                    try { importProject(await file.text()) } catch { toast('No se pudo leer el archivo') }
+                  }} />
+                <Button onClick={() => fileInput.current?.click()}>📂 Abrir archivo JSON</Button>
+                <Button variant="outline" onClick={exportProject}>⬇️ Descargar este mundo</Button>
+                <Button variant="outline" onClick={() => restoreBackup()}>↩️ Recuperar anterior</Button>
+              </DialogContent>
+            </Dialog>
 
             <Button
               onClick={saveProject}

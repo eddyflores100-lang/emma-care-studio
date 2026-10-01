@@ -85,7 +85,7 @@ export interface Rule {
 export type PetState = 'idle' | 'walk' | 'eat' | 'sleep' | 'drink' | 'rest'
 
 /** órdenes de obediencia que el dueño puede dar */
-export type Command = 'sit' | 'stay' | 'come' | 'hide'
+export type Command = 'sit' | 'stay' | 'come' | 'hide' | 'run' | 'walk' | 'jump' | 'dance'
 
 /** sorpresas aleatorias del juego */
 export type EventKind = 'lluvia' | 'escasez' | 'mariposa' | 'regalo'
@@ -153,7 +153,7 @@ export interface PetRuntime {
   // ===== órdenes del dueño (sentado, quieto, ven) =====
   obey: { cmd: Command; until: number } | null
   /** orden por voz con destino: "¡Max a la casa!" — camina hasta el lugar indicado */
-  goTo: { dest: 'casa' | 'cama' | 'agua' | 'comida'; until: number } | null
+  goTo: { dest: 'casa' | 'casita' | 'cama' | 'agua' | 'comida' | 'bano'; until: number } | null
 }
 
 export interface Particle {
@@ -171,13 +171,28 @@ export interface SayBubble {
 
 export interface SavedProject {
   /** v1 = sin mundos (todo jardín); v2 = con niveles y desbloqueos */
-  version: 1 | 2
+  version: 1 | 2 | 3
   objects: WorldObject[]
   rules: Rule[]
   coins: number
   savedAt: string
   unlockedLevels?: LevelId[]
   currentLevel?: LevelId
+  pets?: Record<string, SavedPet>
+}
+
+/** Durable progress; transient fights/targets are never resumed after importing. */
+export interface SavedPet {
+  stats: Record<StatKey, number>
+  lvl: number
+  xp: number
+  injured: boolean
+  sick: boolean
+  state: 'idle' | 'sleep' | 'rest'
+  healRemaining: number
+  restRemaining: number
+  stay: boolean
+  hold?: { cmd: 'stay' | 'sit'; remaining: number | null } | null
 }
 
 export type PlayerAction = 'alimentar' | 'acariciar' | 'jugar' | 'banar' | 'dormir' | 'curar'

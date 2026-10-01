@@ -4,10 +4,11 @@
 // Los mundos cerrados se abren con monedas ganadas cuidando mascotas.
 
 import { useStudio } from '@/lib/studio/store'
-import { LEVELS } from '@/lib/studio/catalog'
+import { LEVELS, catalogById } from '@/lib/studio/catalog'
 import { cn } from '@/lib/utils'
 
 export function LevelBar() {
+  const objects = useStudio(s => s.objects)
   const currentLevel = useStudio((s) => s.currentLevel)
   const unlockedLevels = useStudio((s) => s.unlockedLevels)
   const coins = useStudio((s) => s.coins)
@@ -24,13 +25,14 @@ export function LevelBar() {
       {LEVELS.map((l) => {
         const unlocked = unlockedLevels.includes(l.id)
         const active = currentLevel === l.id
+        const count = objects.filter(o => o.level === l.id && catalogById[o.catalogId]?.kind === 'pet').length
         return (
           <button
             key={l.id}
             onClick={() => setLevel(l.id)}
             title={unlocked ? l.desc : `${l.desc} — cuesta ${l.cost} 🪙`}
             aria-label={
-              unlocked ? `Ir al mundo ${l.name}` : `Desbloquear el mundo ${l.name} por ${l.cost} monedas`
+              unlocked ? `Ir al mundo ${l.name}, ${count} mascotas` : `Desbloquear el mundo ${l.name} por ${l.cost} monedas`
             }
             className={cn(
               'flex shrink-0 items-center gap-1 rounded-full border-2 px-2.5 py-1.5 text-xs font-black whitespace-nowrap transition-all active:scale-95',
@@ -44,7 +46,7 @@ export function LevelBar() {
             <span className="text-base" aria-hidden>
               {unlocked ? l.emoji : '🔒'}
             </span>
-            {l.name}
+            {l.name}{unlocked && count > 0 && <span className="text-[10px] opacity-80"> · {count}🐾</span>}
             {!unlocked && <span className="text-[10px] font-bold">{l.cost} 🪙</span>}
           </button>
         )

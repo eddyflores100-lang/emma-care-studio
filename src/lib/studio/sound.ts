@@ -613,6 +613,21 @@ export function petVoice(catalogId: string, mood: Mood) {
 // ===== efectos de interfaz =====
 
 export const sfx = {
+  /** Agua al beber o bañarse. */
+  water() {
+    for (let i = 0; i < 4; i++) slide(700 + i * 150, 240, i * 0.09, 0.1, 'sine', 0.05)
+    noise(0, 0.35, 0.025, 1400)
+  },
+  jump() { slide(220, 880, 0, 0.18, 'triangle', 0.07) },
+  dance() {
+    for (const [i, note] of [523, 659, 784, 659, 523, 784].entries())
+      tone(note, i * 0.14, 0.1, 'triangle', 0.055)
+  },
+  travel() {
+    noise(0, 0.22, 0.03, 800)
+    tone(659, 0.2, 0.1, 'sine', 0.06)
+    tone(988, 0.32, 0.15, 'sine', 0.06)
+  },
   click() {
     tone(660, 0, 0.07, 'triangle', 0.07)
   },
