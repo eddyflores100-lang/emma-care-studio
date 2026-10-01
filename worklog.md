@@ -104,3 +104,24 @@ Stage Summary:
 - Emma Care Studio v0.4: persecuciones de punta a punta con vibración continua, toque calmante del dueño, orden ¡Escondeos!, mascotas que se cansan y van solas a beber agua o comer, y niveles de mascota con fiesta
 - Despliegue empaquetado: GitHub Actions + CNAME → emmacare.alicelabs.site (faltan solo: crear repo y apuntar DNS, pasos en README)
 - Capturas: /home/z/my-project/download/emma4-nivel.png, emma4-movil.png, emma4-final.png
+
+---
+Task ID: 6
+Agent: Super Z (main)
+Task: Autoguardado + crear repo GitHub + desplegar emmacare.alicelabs.site (token del usuario)
+
+Work Log:
+- Autoguardado: store.ts añade lastSavedAt + saveSilent() (guarda en localStorage sin toast); page.tsx suscribe al store (debounce 1.2s tras objects/rules/coins/level) + saveNow en pagehide y visibilitychange; HeaderBar muestra píldora "✓ guardado" (key=lastSavedAt, animación emma-saved 3s en globals.css); verificado en navegador: añadir objeto → localStorage actualizado solo (16 objetos), lastSavedAt activo
+- eslint.config.mjs: ignorar .next-export (el lint escaneaba el build estático y daba 1988 problemas falsos)
+- GitHub con token del usuario: usuario eddyflores100-lang; creado repo público eddyflores100-lang/emma-care-studio (homepage emmacare.alicelabs.site); push main (commits f1d264e, 63095d8, 64c8e1f); remote origin limpio (sin token)
+- GitHub Pages: activado con build_type=workflow; workflow Deploy OK (2 runs success); PATCH cname vía API → 404 (limitación conocida con workflow builds: se fija en Settings→Pages o con el CNAME del artefacto cuando el DNS apunte)
+- BUG CRÍTICO encontrado y arreglado: el sitio en github.io/emma-care-studio/ servía HTML sin basePath → los chunks /_next/* daban 404 → no hidrataba (título sí, juego no). Fix: next.config.ts lee PAGES_BASE_PATH (basePath condicional) y el workflow exporta PAGES_BASE_PATH=/emma-care-studio (comentado: borrar la línea al activar el dominio propio). Build local con basePath verificado (scripts /emma-care-studio/_next/...)
+- Verificado EN VIVO https://eddyflores100-lang.github.io/emma-care-studio/: título OK, __emma presente, startPlay() → mode play con 3 mascotas (perro/gato/ratón), cero errores JS; capturas emma5-live-jugando.png
+- README actualizado: repo real, guía DNS con valor eddyflores100-lang.github.io, roadmap v0.5 ✅
+- PENDIENTE DEL USUARIO (única pieza que no puedo hacer): añadir en el gestor DNS de alicelabs.site el registro CNAME emmacare → eddyflores100-lang.github.io; cuando resuelva, Settings → Pages → Custom domain emmacare.alicelabs.site (+ Enforce HTTPS) y borrar PAGES_BASE_PATH del workflow para servir en raíz
+
+Stage Summary:
+- Emma Care Studio v0.5.0: autoguardado total (editor y juego) + repo GitHub creado y subido + Pages en vivo funcionando
+- URL jugable ya activa: https://eddyflores100-lang.github.io/emma-care-studio/
+- Repo: https://github.com/eddyflores100-lang/emma-care-studio
+- Dominio emmacare.alicelabs.site: solo falta el registro DNS (instrucciones en README §Publicación)
