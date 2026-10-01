@@ -191,3 +191,20 @@ Stage Summary:
 - Build estático OK; pendiente push + PUT del dominio cuando el certificado exista
 - Push 1a7148d → Actions success; emmacare.alicelabs.site HTTP 200 con hydrate verificado (window.__emma presente, 0 errores)
 - CNAME configurado vía API (PUT /pages, 204) tras provisionar el certificado; pendiente opcional: enforce HTTPS si aún no aplica
+
+---
+Task ID: 9
+Agent: Super Z (main)
+Task: Revisión completa del repo + verificación de deployment
+
+Work Log:
+- Repo local sincronizado: había 1 commit sin push (7a8eceb, solo worklog + captura emma8-dominio-live.png); push con token → remoto ahora en 7a8eceb
+- Últimos cambios implementados confirmados: v0.7 (voz 🎙️ + fullscreen + horizontal), v0.8 (voz 100%: auto al jugar + "Max a la casa/cama/agua/comida" + respuestas por nombre; juego a pantalla completa con dock flotante mini; RightDrawer = mochila oculta en borde derecho con submenu apilable; alertas discretas) — 16 archivos, +954/−341 líneas
+- Deploy verificado: run 36807220367 (v0.8, sha 1a7148d) success; push de 7a8eceb disparó run 36811897961 → completed success
+- Dominio custom emmacare.alicelabs.site: cname configurado en Pages ✓, certificado TLS approved (expira 2026-12-29), https_enforced true ✓
+- Sitio en vivo: raíz 200 en 0.25s, chunks JS/CSS 200 con contenido real, keyword "quietos" presente en bundle desplegado (voz incluida) ✓
+- Falsas alarmas descartadas: manifest.webmanifest 404 = app sin PWA manifest (no referenciado); github.io/emma-care-studio → 301 = redirect estándar de Pages con dominio custom
+- Nota: package.json sigue en 0.7.0 (cosmético, el código es v0.8); token de GitHub sigue expuesto en el chat — recordar revocarlo
+
+Stage Summary:
+- TODO DEPLOYADO Y VERIFICADO: https://emmacare.alicelabs.site vive con v0.8 completa (voz + fullscreen + mochila derecha); repo remoto == local (7a8eceb); 8/8 workflow runs success
