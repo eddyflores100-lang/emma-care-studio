@@ -125,3 +125,25 @@ Stage Summary:
 - URL jugable ya activa: https://eddyflores100-lang.github.io/emma-care-studio/
 - Repo: https://github.com/eddyflores100-lang/emma-care-studio
 - Dominio emmacare.alicelabs.site: solo falta el registro DNS (instrucciones en README §Publicación)
+
+---
+Task ID: 7
+Agent: Super Z (main)
+Task: Heridas tras correteadas/peleas + reposo en casa + hospital zona segura con curación (petición: "después de una correteada o pelea vayan a la casa o al hospital, desbloquear para curar, en el hospital nadie pelea, todos en reposo curándose")
+
+Work Log:
+- types.ts: PetState + 'rest'; PetRuntime + injured/healAt/restUntil; targetKind + 'shelter'; WorldObject + home? (mundo de origen para volver del hospital)
+- store.ts: constantes HEAL_HOME_MS 75s / HEAL_HOSPITAL_MS 25s / INJURY_CHASE 0.45 / INJURY_FIGHT 0.65; helpers nearestBed(), nearestShelter(), markInjured() (🩹💫+voz triste+toast), returnHomeAfterHeal() (vuelve solita en ambulancia a los 2.6s)
+- PELEAS 💥: si el depredador alcanza a la presa (dist<3.5) → pelea breve simétrica (ambos lados la detectan en su propia iteración, sin bugs de orden), partículas 💥, vib([90,40,90]), shake, toast; cooldown del par rival:30s tras pelear (evita re-persecución instantánea)
+- HERIDAS: al terminar cada persecución/pelea se tira dado (pelea 65%, normal 45%, escapó limpio 12%); herido/a: cojea (velocidad ×0.45, clase pet-limp), cara 🤕, burbuja 🩹!, NO pelea ni es perseguido, NO atrapa pelota, NO juega; se va SOLO a la casita/refugio más cercano → estado 'rest' (healAt = +75s en casa)
+- HOSPITAL: zona segura — detección de rivales desactivada por completo (nadie pelea) y sin eventos aleatorios; mascotas enfermas/heridas caminan a la camilla (nearestBed) y reposan; cura rápida 25s; sanas también reposan en camillas (55%); al curarse: 🎉✨ +8 XP +10🪙 si sube, toast y returnHomeAfterHeal → 🚑 vuelve a su mundo de origen
+- sendToHospital(id): gate de desbloqueo (toast 🔒 si no está comprado), mueve la mascota a 'hospital' guardando home, 🚑 + whoosh + vib, y viaja automáticamente con ella; botón 🚑 Hospital en HUD solo para heridos fuera del hospital; playerAction curar: heridas solo se curan en el hospital (gate) o descansando en casa; jugar bloqueado a heridos; chips con 🩹
+- gameTick: rama 'rest' (regen suave, partículas ❤️‍🩹/💤, curación al vencer healAt, despertar de sanas al vencer restUntil)
+- WorldCanvas: cara 🤕, burbuja 🩹!, badge rest 🩹/💤, clase pet-limp (keyframes emma-limp en globals.css)
+- FIX bug propio: returnHome usaba rt.home (runtime no lo tiene) → obj.home (objeto); detectado en pruebas
+- Pruebas agent-browser: herida manual → gato va SOLO al refugio (rest, heal 73s) ✓; sendToHospital sin desbloquear → toast 🔒 ✓; con desbloqueo → gato en hospital + cámara viaja + home=jardin ✓; reposo camilla heal 21s ✓; cura → vuelve sola al jardín en 🚑 ✓; 4 rondas de pelea forzada: 💥 en ambos lados + heridos variables (probabilístico OK) ✓; perro/gato reposo tras herida ✓; autosave restauró estado exacto tras reload (gato en hospital, 202🪙) ✓; HUD 🚑 visible ✓; overlay IntroSplash bloqueaba clics tras reset HMR (cerrar con JUGAR AHORA) — nota: tras HMR el store se recrea; lint limpio, build OK, deploy Pages success (4a64482), sitio en vivo verificado con sendToHospital presente
+- Capturas: emma6-herido-casa.png (gato tras el árbol con chip 🩹), emma6-hospital-reposo2.png (gato 🤕 rumbo a camilla en hospital)
+
+Stage Summary:
+- Emma Care Studio v0.6: ciclo completo correteada/pelea → heridos → reposo en casa (lento) o 🚑 hospital desbloqueable (rápido, zona segura donde nadie pelea, todos en reposo) → curados vuelven solitos a casa
+- Deploy en vivo: https://eddyflores100-lang.github.io/emma-care-studio/ (v0.6)
