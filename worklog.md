@@ -84,3 +84,23 @@ Work Log:
 Stage Summary:
 - Emma Care Studio v0.3 "¡Caos divertido!": 15 mascotas con rivalidades reales (persecuciones con vibración y temblor, gato delante/perro detrás), escondites y trepaderas para escapar, 6 animales nuevos con voz propia, sorpresas aleatorias, cuidado con el dedo (acariciar), pelota con fetch y adiestramiento con premios
 - Capturas en /home/z/my-project/download/: emma3-portada, emma3-persecucion, emma3-escondite, emma3-trepar, emma3-lluvia, emma3-editor, emma3-movil-juego, emma3-final
+
+---
+Task ID: 5
+Agent: Super Z (main)
+Task: Persecuciones por TODA la pantalla, calmar tocando la pantalla, ¡Escondeos!, cansancio + buscar agua/comida, niveles de mascota, y despliegue emmacare.alicelabs.site
+
+Work Log:
+- store.ts: CHASE_MS 5.2s→7.8s; presa se COMPROMETE con un rumbo lejano (lado opuesto del perseguidor, de punta a punta; solo cambia al llegar o si el rival se pega <9) + 15% amagues burlones; velocidad huida ×2.45 / caza ×1.95; gainXp()/celebrateLevel() (XP 0-100 → sube Nv, +6 en barras, +10🪙, fiesta 🎉⭐); gameTick: correr gasta energia ×2.9 y comida extra, vib(45)+tiemblito cada segundo mientras hay persecución; calmAll(x,y) — tocar el lienzo = aplauso 👏 que termina TODAS las persecuciones (respeta premios y cooldowns del par); giveCommand: nueva orden 'hide' ¡Escondeos! (corre al escondite/trepadera más cercano, se oculta 7s con 👀, al expirar sale) + XP por obedecer; nueva fuente de agua special:'water' (bebedero 🚰/estanque/fuente) — mascota con energia<32 va SOLA a beber (estado 'drink', +22⚡ +4❤️, XP); XP también por: comer en comedero, atrapar pelota (+8), escapar persecución (+8), cada acción de cuidado, caricia; moodOf devuelve enojado/miedo durante la persecución
+- types.ts: PetState +drink; SpecialKind +water; Command +hide; PetRuntime +lvl/xp/hideSpot/drinkUntil/targetKind water|escape
+- catalog.ts: bebedero 🚰 (casa), estanque/fuente marcados special water; bebedero en demo, blank y starters de los 4 mundos (suero en hospital, cubeta en playa)
+- WorldCanvas.tsx: handleCanvasClick llama calmAll; pista "👋 ¡Toca la pantalla para calmarlos!" durante persecución; badge violeta Nv{n} en mascotas Nv2+; gotita 💧 al beber; burbuja 💧! con energia<22
+- PlayHUD.tsx: barra ⭐ Nv. X + XP/100; botón 🙈 ¡Escondeos! (grid 5); chips con Nv{lvl}; hint con "si hay persecución toca la pantalla 👏"
+- Despliegue: next.config.ts con EXPORT_MODE=1 (output export + distDir .next-export separado, no toca el dev server); api/route.ts con dynamic force-static; package.json v0.4 + script build:export (valida out/index.html); public/CNAME (emmacare.alicelabs.site); .github/workflows/deploy.yml (Pages con Bun, checkout→build:export→upload→deploy); README.md completo (features + guía GitHub + DNS CNAME emmacare→usuario.github.io); LICENSE MIT; .gitignore ampliado; commit 7ed238d
+- Pruebas agent-browser: persecución cruza el mundo (X 27→88 = 61% del ancho, tracker 153 muestras) ✓; energías bajan por correr (95→67) y bloquean nuevas persecuciones <12 ✓; calmar con toque: 2 mascotas→0, cooldowns activos ✓; ¡Escondeos!: hideSpot elegido, escondido con 👀, sale al expirar ✓; buscar agua: energia 18→37 tras beber en el bebedero ✓; nivel: 96xp+alimentar → Nv2, +10🪙, badge Nv2 en canvas y HUD ✓; móvil 390px: botón Escondeos visible ✓; cero errores JS, lint limpio, build estático OK (out/ listo)
+- Limitación del entorno: sin gh CLI ni credenciales GitHub → no se pudo crear el repo desde aquí; el repo git está 100% listo para push (commit hecho) con instrucciones exactas en README.md
+
+Stage Summary:
+- Emma Care Studio v0.4: persecuciones de punta a punta con vibración continua, toque calmante del dueño, orden ¡Escondeos!, mascotas que se cansan y van solas a beber agua o comer, y niveles de mascota con fiesta
+- Despliegue empaquetado: GitHub Actions + CNAME → emmacare.alicelabs.site (faltan solo: crear repo y apuntar DNS, pasos en README)
+- Capturas: /home/z/my-project/download/emma4-nivel.png, emma4-movil.png, emma4-final.png
