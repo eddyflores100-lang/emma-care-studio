@@ -31,6 +31,40 @@ export default function Home() {
     ;(window as unknown as { __emma?: typeof useStudio }).__emma = useStudio
   }, [])
 
+  // ===== AUTOGUARDADO =====
+  // se guarda solo 1.2 s después de cualquier cambio importante
+  // (objetos, reglas, monedas, mundos) y también al cerrar/ocultar la pestaña
+  useEffect(() => {
+    let timer: number | null = null
+    const saveNow = () => {
+      if (timer) window.clearTimeout(timer)
+      timer = null
+      useStudio.getState().saveSilent()
+    }
+    const unsub = useStudio.subscribe((s, prev) => {
+      const dirty =
+        s.objects !== prev.objects ||
+        s.rules !== prev.rules ||
+        s.coins !== prev.coins ||
+        s.currentLevel !== prev.currentLevel ||
+        s.unlockedLevels !== prev.unlockedLevels
+      if (!dirty) return
+      if (timer) window.clearTimeout(timer)
+      timer = window.setTimeout(saveNow, 1200)
+    })
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') saveNow()
+    }
+    window.addEventListener('pagehide', saveNow)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      unsub()
+      if (timer) window.clearTimeout(timer)
+      window.removeEventListener('pagehide', saveNow)
+      document.removeEventListener('visibilitychange', onHide)
+    }
+  }, [])
+
   // bucle de juego: movimiento suave (rAF) + tick de necesidades (1 s)
   useEffect(() => {
     if (mode !== 'play') return

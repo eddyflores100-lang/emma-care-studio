@@ -98,6 +98,7 @@ export function HeaderBar() {
   const mode = useStudio((s) => s.mode)
   const coins = useStudio((s) => s.coins)
   const muted = useStudio((s) => s.muted)
+  const lastSavedAt = useStudio((s) => s.lastSavedAt)
   const startPlay = useStudio((s) => s.startPlay)
   const stopPlay = useStudio((s) => s.stopPlay)
   const saveProject = useStudio((s) => s.saveProject)
@@ -118,6 +119,14 @@ export function HeaderBar() {
         <span className="hidden text-xs font-bold text-slate-400 lg:inline">
           {mode === 'edit' ? '✏️ editor de juegos para niños' : '🐾 modo juego'}
         </span>
+        {lastSavedAt > 0 && (
+          <span
+            key={lastSavedAt}
+            className="emma-saved hidden rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-black text-emerald-600 sm:inline"
+          >
+            ✓ guardado
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2">

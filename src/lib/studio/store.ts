@@ -203,6 +203,9 @@ interface StudioState {
   ballPending: boolean
   /** mientras now < shakeUntil, el lienzo tiembla (¡persecuciones!) */
   shakeUntil: number
+  // ===== autoguardado =====
+  /** momento del último autoguardado (0 = aún no) — para el indicador ✓ */
+  lastSavedAt: number
 
   hydrate: () => void
   addObject: (catalogId: string, x?: number, y?: number) => void
@@ -220,6 +223,8 @@ interface StudioState {
   updateRule: (id: string, patch: Partial<Rule>) => void
   removeRule: (id: string) => void
   saveProject: () => void
+  /** autoguardado silencioso: igual que guardar pero sin toast (lo dispara el juego) */
+  saveSilent: () => void
   exportProject: () => void
   newProject: () => void
   toggleMute: () => void
@@ -295,6 +300,7 @@ export const useStudio = create<StudioState>((set, get) => {
     ball: null,
     ballPending: false,
     shakeUntil: 0,
+    lastSavedAt: 0,
 
     hydrate: () => {
       if (get().hydrated) return
@@ -529,6 +535,25 @@ export const useStudio = create<StudioState>((set, get) => {
         sfx.magic()
       } catch {
         toast('😅 No se pudo guardar el proyecto')
+      }
+    },
+
+    saveSilent: () => {
+      const s = get()
+      const data: SavedProject = {
+        version: 2,
+        objects: s.objects,
+        rules: s.rules,
+        coins: s.coins,
+        savedAt: new Date().toISOString(),
+        unlockedLevels: s.unlockedLevels,
+        currentLevel: s.currentLevel,
+      }
+      try {
+        localStorage.setItem(SAVE_KEY, JSON.stringify(data))
+        set({ lastSavedAt: Date.now() })
+      } catch {
+        // almacenamiento lleno o bloqueado: se reintenta en el próximo cambio
       }
     },
 
