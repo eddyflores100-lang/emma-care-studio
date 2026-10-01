@@ -9,10 +9,11 @@
 ## ✨ ¿Qué se puede hacer?
 
 ### 🛠️ Modo EDITAR
-- **Arrastra y suelta** 16 mascotas y 34 objetos en el mundo: 🐶🐱🐰🐭🐦🐹🐔🦆🦊🐻🐼🦁🐷🐵🐢 + casas, comederos, bebederos, árboles, estanques…
+- **Arrastra y suelta** 15 mascotas y 28 objetos en el mundo: 🐶🐱🐰🐭🐦🐹🐔🦆🦊🐻🐼🦁🐷🐵🐢 + casas, comederos, bebederos, árboles, estanques…
 - Cambia **nombre, tamaño, color arcoíris y velocidad** de cada cosa.
 - Crea **reglas mágicas**: *"CUANDO Max esté cerca del juguete ENTONCES aumenta su felicidad"*.
 - 4 **mundos por desbloquear**: Jardín → Casa (60🪙) → Hospital (120🪙) → Playa (200🪙).
+- **Autoguardado**: todo se guarda solo (1,2 s después de cada cambio y al cerrar la pestaña) — verás el sello "✓ guardado".
 
 ### 🕹️ Modo JUGAR
 - Las mascotas **viven solas**: deambulan, comen del comedero, beben agua del bebedero/estanque/fuente, duermen en su cama y se ponen enfermas si no las cuidas.
@@ -38,33 +39,21 @@ Cada animal tiene su **voz sintetizada** (WebAudio, sin archivos): el perro ladr
 
 ---
 
-## 🚀 Cómo publicar tu propia copia
+## 🚀 Publicación (¡ya está en marcha!)
 
-### 1. Subir a GitHub
-```bash
-# con GitHub CLI
-gh repo create emma-care-studio --public --source=. --push
+- **Repositorio**: [github.com/eddyflores100-lang/emma-care-studio](https://github.com/eddyflores100-lang/emma-care-studio)
+- **Deploy**: GitHub Actions compila y publica automáticamente en cada push a `main`.
+- **URL de Pages**: <https://eddyflores100-lang.github.io/emma-care-studio/>
 
-# o a mano: crea el repo en github.com/new y luego:
-git remote add origin git@github.com:TU-USUARIO/emma-care-studio.git
-git push -u origin main
-```
-
-### 2. Activar GitHub Pages
-- En el repo: **Settings → Pages → Source: GitHub Actions**.
-- El workflow `.github/workflows/deploy.yml` compila y publica solo en cada push.
-
-### 3. Dominio propio (emmacare.alicelabs.site)
-- El archivo `public/CNAME` ya contiene el dominio.
-- En tu gestor de DNS de `alicelabs.site`, añade un registro **CNAME**:
+### Dominio propio (emmacare.alicelabs.site)
+El archivo `public/CNAME` ya contiene el dominio, y Pages lo aplicará al publicar.
+Solo falta un registro DNS en el gestor de `alicelabs.site`:
 
 | Tipo | Nombre | Valor |
 |------|--------|-------|
-| CNAME | `emmacare` | `TU-USUARIO.github.io` |
+| CNAME | `emmacare` | `eddyflores100-lang.github.io` |
 
-- En **Settings → Pages → Custom domain**, escribe `emmacare.alicelabs.site` y activa *Enforce HTTPS*.
-
-¡Listo! En unos minutos el juego estará en `https://emmacare.alicelabs.site` 🎉
+Cuando el DNS apunte, entra en **Settings → Pages** y activa *Enforce HTTPS*. ¡Listo!
 
 ---
 
@@ -80,8 +69,9 @@ bun run build:export   # build estático para Pages (carpeta out/)
 **Tecnologías**: Next.js 16 · TypeScript · Tailwind CSS 4 · shadcn/ui · Zustand · WebAudio API. Sin base de datos: el proyecto se guarda en `localStorage` y se puede exportar a JSON.
 
 ## 🗺️ Hoja de ruta
-- **v0.5** — Exportar el mundo a Roblox Studio (JSON → Lua)
-- **v0.6** — Biblioteca de sonidos y sprites propios
+- **v0.5** — ✅ Autoguardado automático + publicación en GitHub Pages
+- **v0.6** — Exportar el mundo a Roblox Studio (JSON → Lua)
+- **v0.7** — Biblioteca de sonidos y sprites propios
 - **v1.0** — Asistente IA que construye el mundo contándole un cuento
 
 ---
