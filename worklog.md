@@ -172,3 +172,20 @@ Stage Summary:
 - Emma Care Studio v0.7.0: se juega HABLÁNDOLE (quietos corta peleas al instante, nombres con respuesta), a pantalla completa y en horizontal de móvil, con alertas que no estorban
 - Deploy push 5911560 → Actions; sitio vivo en github.io/emma-care-studio y preparado para raíz cuando el dominio se registre
 - DOMINIO (única pieza manual restante): Settings → Pages → Custom domain emmacare.alicelabs.site → Save → Enforce HTTPS cuando emita certificado (5-30 min). DNS del usuario ya correcto
+
+---
+Task ID: 8
+Agent: Super Z (main)
+Task: v0.8 — Voz 100% operativa (auto + destinos) + juego a pantalla completa + mochila oculta derecha
+
+Work Log:
+- Diagnóstico del sitio: DNS OK, TLS OK, pero GitHub Pages devolvía 404 → cname nunca configurado (API PUT queda pendiente de certificado)
+- voice.ts reescrito: motor singleton fuera de React, arranca SOLO con el clic en ▶ ¡JUGAR() (gesto válido para el permiso de micrófono), reinicio automático, 3 alternativas de escucha
+- Nuevas órdenes de voz con DESTINO: "Max a la casa/cama/agua/comida" → caminan al objeto real (house), premio +2🪙 al llegar; nombres con protección fuzzy contra palabras de destino
+- store.ts: PetRuntime.goTo, rama 'goto' en voiceCommand, moveTick respeta goTo hasta llegar, makeRuntime goTo:null
+- Layout v0.8: el lienzo ocupa TODA la pantalla (edit y play); PlayHUD → dock flotante compacto (mascotas + 🍖🤗🎾🎙️+🧰); RightDrawer nuevo: panel oculto que aparece al tocar el borde derecho (zona invisible + asita ‹‹) con SUBMENU APILABLE (acordeón: Estado/Cuidado/Órdenes en juego; Objetos/Ajustes/Reglas en editor)
+- CSS: dock, drawer, acordeón, zona táctil, ajustes horizontal móvil; alertas siguen pequeñitas abajo
+- Probado en navegador (812x375): goto casa OK (Max llega a la Casita real), 'misi' responde ¡Miau! y viene, 'a comer' OK, 'quietos' OK, 'escondeos' OK; reposo respeta órdenes; 0 errores JS
+
+Stage Summary:
+- Build estático OK; pendiente push + PUT del dominio cuando el certificado exista

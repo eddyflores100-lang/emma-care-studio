@@ -114,7 +114,7 @@ export interface PetRuntime {
   /** destino actual en % */
   tx: number
   ty: number
-  targetKind: 'random' | 'food' | 'bed' | 'water' | 'escape' | 'shelter'
+  targetKind: 'random' | 'food' | 'bed' | 'water' | 'escape' | 'shelter' | 'goto'
   /** nivel de la mascota (sube con XP por buen cuidado) */
   lvl: number
   /** experiencia 0-99: al llegar a 100 sube de nivel */
@@ -152,6 +152,8 @@ export interface PetRuntime {
   onTopOf: string | null
   // ===== órdenes del dueño (sentado, quieto, ven) =====
   obey: { cmd: Command; until: number } | null
+  /** orden por voz con destino: "¡Max a la casa!" — camina hasta el lugar indicado */
+  goTo: { dest: 'casa' | 'cama' | 'agua' | 'comida'; until: number } | null
 }
 
 export interface Particle {

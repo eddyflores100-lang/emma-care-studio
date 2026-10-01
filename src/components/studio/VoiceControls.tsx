@@ -1,25 +1,25 @@
 'use client'
 
-// Emma Care Studio — controles de VOZ
-// Botón 🎤 que escucha continuamente y un globito pequeñito (abajo a la
-// izquierda, nunca tapa el título) con lo que está oyendo.
+// Emma Care Studio — control de VOZ
+// Botón 🎙 compacto (va en el dock flotante). El motor vive en voice.ts
+// (singleton) y arranca SOLO al pulsar ▶ ¡JUGAR!; aquí se puede apagar
+// o reencender, y un globito discreto muestra lo que está oyendo.
 
 import { useEffect } from 'react'
 import { toast } from 'sonner'
-import { useStudio } from '@/lib/studio/store'
 import { useVoice } from '@/lib/studio/voice'
 import { cn } from '@/lib/utils'
 
 export function VoiceControls() {
-  const voiceCommand = useStudio((s) => s.voiceCommand)
-  const { supported, listening, error, heard, toggle } = useVoice((text) => {
-    useStudio.getState().voiceCommand(text)
-  })
+  const { supported, listening, error, heard, toggle } = useVoice()
 
-  // si el navegador nos negó el micrófono, avisamos una sola vez
+  // si el navegador nos negó el micrófono (o falta internet), avisamos
   useEffect(() => {
     if (error === 'permiso') {
       toast('🎙️ Permite el micrófono para hablar con tus mascotas', { duration: 4200 })
+    }
+    if (error === 'red') {
+      toast('🎙️ La escucha necesita internet… revisa la conexión', { duration: 4200 })
     }
   }, [error])
 
@@ -34,23 +34,24 @@ export function VoiceControls() {
         title={
           listening
             ? 'Escuchando… pulsa para parar'
-            : 'Habla a tus mascotas: ¡Quietos! ¡Escondeos! ¡Ven! ¡Sentado! o su nombre'
+            : 'Habla a tus mascotas: ¡Quietos! ¡Escondeos! ¡Ven! ¡Max a la casa! o su nombre'
         }
         className={cn(
-          'flex h-11 flex-col items-center justify-center gap-0 rounded-2xl border-2 text-[10px] font-black transition-all active:scale-95',
+          'emma-dock-btn shrink-0',
           listening
             ? 'border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-200'
-            : 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100',
+            : 'border-sky-300 bg-sky-50',
         )}
       >
-        <span className={cn('text-lg leading-none', listening && 'emma-mic-live')}>🎤</span>
-        {listening ? 'Escuchando' : 'Voz'}
+        <span className={cn('leading-none', listening && 'emma-mic-live')} aria-hidden>
+          🎙️
+        </span>
       </button>
 
       {/* lo que oye, en una pastillita discreta abajo (sin estorbar) */}
       {listening && (
         <div className="emma-voice-cap" role="status" aria-live="polite">
-          🎤 {heard || 'escuchando… di ¡Quietos! ¡Escondeos! ¡Ven! o su nombre'}
+          🎙️ {heard || 'escuchando… ¡Quietos! · ¡Escondeos! · ¡Ven! · ¡Max a la casa!'}
         </div>
       )}
     </>

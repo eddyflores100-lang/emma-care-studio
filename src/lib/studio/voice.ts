@@ -1,13 +1,21 @@
 'use client'
 
-// Emma Care Studio — comandos por VOZ (Web Speech API)
-// La niña habla y sus mascotas obedecen: ¡Quietos!, ¡Escondeos!, ¡Ven!,
-// ¡Sentado!, llamarlas por su nombre ("¡Max!") o mandarlas al hospital.
+// Emma Care Studio — comandos por VOZ (Web Speech API) v2
+// La niña habla y sus mascotas obedecen. Todo funciona MIENTRAS SUENA:
+//  · "¡Quietos!"            → se acaban las peleas y todos se congelan
+//  · "¡Escondeos!" / refugio → corren a esconderse
+//  · "¡Ven!" / "¡Aquí!"     → vienen hacia la dueña
+//  · "¡Sentado!"            → se sientan
+//  · "¡Max!" (su nombre)    → contesta y viene
+//  · "¡Max a la casa!"      → Max camina hasta la casita (también cama,
+//                             agua o comida)
+//  · "hospital"             → la más herida viaja en ambulancia
+//  · "pelota"               → prepara el lanzamiento
 //
-// Funciona en Chrome/Edge/Samsung (Android y escritorio) y en Safari moderno.
-// Requiere HTTPS (el sitio ya lo tiene) y permiso del micrófono.
+// Motor SINGLETON: vive fuera de React para que pueda arrancar solo
+// (dentro del gesto de tocar ▶ ¡JUGAR!) y sobrevivir a los renders.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSyncExternalStore } from 'react'
 import type { WorldObject } from './types'
 
 /** quita mayúsculas, acentos y signos: "¡Quietos!" → "quietos" */
@@ -43,10 +51,11 @@ const WORDS = {
   calm: [
     'quieto', 'quietos', 'quietas', 'quietecitos', 'para', 'paren', 'alto', 'basta',
     'calmense', 'calmados', 'suficiente', 'no peleen', 'no pelear', 'no pelees',
+    'dejense', 'basta de pelea', 'alto ahi', 'stop',
   ],
   hide: [
     'escondeos', 'escondanse', 'esconde', 'esconder', 'esconderse', 'escondite',
-    'refugio', 'ocultense', 'a esconderse',
+    'refugio', 'ocultense', 'a esconderse', 'escondite ya', 'busquen refugio',
   ],
   sit: ['sentado', 'sentados', 'sentate', 'sientate', 'sientense', 'sienta'],
   come: ['ven', 'ven aqui', 'ven aca', 'aqui', 'aca', 'vengan', 'vengan aqui', 'vamos'],
@@ -54,7 +63,22 @@ const WORDS = {
   ball: ['pelota', 'bola', 'lanza la pelota', 'tira la pelota', 'trae la pelota'],
 } as const
 
-export type VoiceKind = keyof typeof WORDS | 'call'
+// destinos: "a la casa", "casa", "a la cama", "toma agua", "a comer"…
+const DESTS: { dest: 'casa' | 'cama' | 'agua' | 'comida'; words: string[] }[] = [
+  {
+    dest: 'casa',
+    words: ['casa', 'casita', 'hogar', 'a la casa', 'a casa', 'ala casa', 'tu casa', 'su casa'],
+  },
+  { dest: 'cama', words: ['cama', 'camita', 'camilla', 'a dormir', 'duermete', 'acuestate', 'a la cama'] },
+  { dest: 'agua', words: ['agua', 'al agua', 'a la agua', 'bebe agua', 'toma agua', 'a beber', 'bebedero'] },
+  {
+    dest: 'comida',
+    words: ['comida', 'comer', 'a comer', 'plato', 'comedero', 'el plato', 'a desayunar', 'a cenar', 'come algo'],
+  },
+]
+
+export type VoiceKind = keyof typeof WORDS | 'call' | 'goto'
+export type VoiceDest = 'casa' | 'cama' | 'agua' | 'comida'
 
 export type VoiceOutcome = 'ok' | 'unknown' | 'noplay'
 
@@ -64,6 +88,8 @@ export interface ParsedVoice {
   named: WorldObject[]
   /** nombre que se escuchó, para el mensaje */
   matchedName: string | null
+  /** destino si la orden era de tipo "a la casa/cama/agua/comida" */
+  dest?: VoiceDest
 }
 
 function wordHit(text: string, words: readonly string[]): boolean {
@@ -79,10 +105,14 @@ function findPetsByName(text: string, pets: WorldObject[]): { named: WorldObject
   for (const p of pets) {
     const n = norm(p.name)
     if (n.length < 2) continue
-    let ok = n.length >= 3 && text.includes(n)
+    // evitar que "casa" del destino coincida con una mascota por fuzzy corto
+    let ok = n.length >= 3 && new RegExp(`(^| )${n}( |$)`).test(text)
     if (!ok) {
       for (const tok of text.split(' ')) {
         if (tok.length < 3) continue
+        // si el token es una palabra de destino, no la tratamos como nombre
+        const isDest = DESTS.some((d) => d.words.includes(tok))
+        if (isDest) continue
         const d = lev(tok, n)
         if (d === 0 || (n.length >= 4 && d <= 1) || (n.length === 3 && d <= 1 && tok.length === 3)) {
           ok = true
@@ -103,10 +133,14 @@ export function parseVoiceCommand(raw: string, pets: WorldObject[]): ParsedVoice
   const t = norm(raw)
   if (!t) return null
   const { named, name } = findPetsByName(t, pets)
+  // 1) destinos ("a la casa") — antes que las demás para que "casa" no se pierda
+  const destHit = DESTS.find((d) => d.words.some((w) => wordHit(t, [w])))
+  // 2) órdenes normales
   const kind = (['calm', 'hide', 'hospital', 'sit', 'come', 'ball'] as const).find((k) =>
     wordHit(t, WORDS[k]),
   )
   if (kind) return { kind, named, matchedName: name }
+  if (destHit) return { kind: 'goto', named, matchedName: name, dest: destHit.dest }
   if (named.length) return { kind: 'call', named, matchedName: name }
   return null
 }
@@ -131,6 +165,7 @@ interface Recog {
   lang: string
   continuous: boolean
   interimResults: boolean
+  maxAlternatives: number
   start(): void
   stop(): void
   abort(): void
@@ -150,108 +185,152 @@ export function isVoiceSupported(): boolean {
   return getCtor() !== null
 }
 
-/**
- * Gancho de micrófono: escucha continuamente y llama a onCommand con lo
- * oído. Los resultados provisionales también se entregan (¡respuesta
- * rápida!); el motor deduplica las repeticiones.
- */
-export function useVoice(onCommand: (text: string) => void) {
-  const [supported, setSupported] = useState(isVoiceSupported)
-  const [listening, setListening] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [heard, setHeard] = useState('')
-  const recogRef = useRef<Recog | null>(null)
-  const wantRef = useRef(false)
-  const cmdRef = useRef(onCommand)
-  useEffect(() => {
-    cmdRef.current = onCommand
-  }, [onCommand])
+// ================= MOTOR SINGLETON =================
+export interface VoiceState {
+  supported: boolean
+  listening: boolean
+  error: 'permiso' | 'red' | null
+  /** último texto oído (para el globito) */
+  heard: string
+}
 
-  // al desmontar, apagamos el micrófono
-  useEffect(() => {
-    return () => {
-      wantRef.current = false
-      try {
-        recogRef.current?.abort()
-      } catch {
-        /* nada */
+type Listener = () => void
+const listeners = new Set<Listener>()
+let st: VoiceState = { supported: false, listening: false, error: null, heard: '' }
+let recog: Recog | null = null
+let want = false
+let restartTimer: number | null = null
+let handler: ((text: string) => void) | null = null
+
+function emit() {
+  st = { ...st }
+  for (const l of listeners) l()
+}
+
+function build(): Recog | null {
+  const Ctor = getCtor()
+  if (!Ctor) return null
+  const r = new Ctor()
+  r.lang =
+    typeof navigator !== 'undefined' && navigator.language?.startsWith('es')
+      ? navigator.language
+      : 'es-ES'
+  r.continuous = true
+  r.interimResults = true
+  r.maxAlternatives = 3
+
+  r.onresult = (e) => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i]
+      const txt = res?.[0]?.transcript ?? ''
+      if (!txt.trim()) continue
+      st.heard = txt
+      emit()
+      // probamos la alternativa principal y, si no se entiende, las demás
+      if (handler) {
+        handler(txt)
+        if (res?.length > 1) {
+          for (let a = 1; a < res.length; a++) {
+            const alt = res[a]?.transcript
+            if (alt && alt.trim() && norm(alt) !== norm(txt)) handler(alt)
+          }
+        }
       }
     }
-  }, [])
-
-  const build = useCallback((): Recog | null => {
-    const Ctor = getCtor()
-    if (!Ctor) return null
-    const r = new Ctor()
-    r.lang =
-      typeof navigator !== 'undefined' && navigator.language?.startsWith('es')
-        ? navigator.language
-        : 'es-ES'
-    r.continuous = true
-    r.interimResults = true
-
-    r.onresult = (e) => {
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const res = e.results[i]
-        const txt = res?.[0]?.transcript ?? ''
-        if (!txt.trim()) continue
-        setHeard(txt)
-        cmdRef.current(txt)
-      }
+  }
+  r.onerror = (e) => {
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      want = false
+      st.listening = false
+      st.error = 'permiso'
+      emit()
+    } else if (e.error === 'network') {
+      st.error = 'red'
+      emit()
+      // la escucha necesita internet; se reintenta sola por si vuelve
     }
-    r.onerror = (e) => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        wantRef.current = false
-        setListening(false)
-        setError('permiso')
-      }
-      // 'no-speech' / 'aborted' son normales: onend rearranca solo
-    }
-    r.onend = () => {
-      if (wantRef.current) {
+    // 'no-speech' / 'aborted' son normales: onend rearranca solo
+  }
+  r.onend = () => {
+    if (want) {
+      // pequeño respiro para no saturar al navegador al rearrancar
+      if (restartTimer) window.clearTimeout(restartTimer)
+      restartTimer = window.setTimeout(() => {
+        if (!want) return
         try {
           r.start()
         } catch {
-          /* ya está arrancando */
+          /* ya arrancando */
         }
-      } else {
-        setListening(false)
-      }
+      }, 300)
+    } else {
+      st.listening = false
+      emit()
     }
-    return r
-  }, [])
+  }
+  return r
+}
 
-  const start = useCallback(() => {
-    if (!isVoiceSupported()) return
-    wantRef.current = true
-    setError(null)
-    setHeard('')
-    const r = recogRef.current ?? build()
-    if (!r) return
-    recogRef.current = r
+export const voiceEngine = {
+  subscribe(l: Listener): () => void {
+    listeners.add(l)
+    return () => {
+      listeners.delete(l)
+    }
+  },
+  getSnapshot(): VoiceState {
+    return st
+  },
+  /** fija quién recibe lo oído (se llama una vez desde la página) */
+  setHandler(fn: (text: string) => void) {
+    handler = fn
+  },
+  /** arranca la escucha — llamar DENTRO de un gesto (clic) del usuario */
+  start() {
+    if (typeof window === 'undefined') return
+    const supported = getCtor() !== null
+    if (st.supported !== supported) {
+      st.supported = supported
+    }
+    if (!supported) {
+      emit()
+      return
+    }
+    want = true
+    st.error = null
+    st.heard = ''
+    if (!recog) recog = build()
+    if (!recog) return
     try {
-      r.start()
-      setListening(true)
-      // si el idioma del móvil no lo trae, WebSpeech avisa: probamos es-ES
+      recog.start()
     } catch {
-      setListening(true)
+      /* ya estaba arrancando: no pasa nada */
     }
-  }, [build])
-
-  const stop = useCallback(() => {
-    wantRef.current = false
+    st.listening = true
+    emit()
+  },
+  stop() {
+    want = false
+    if (restartTimer) {
+      window.clearTimeout(restartTimer)
+      restartTimer = null
+    }
     try {
-      recogRef.current?.stop()
+      recog?.stop()
     } catch {
       /* nada */
     }
-    setListening(false)
-  }, [])
+    st.listening = false
+    emit()
+  },
+  toggle() {
+    if (st.listening) voiceEngine.stop()
+    else voiceEngine.start()
+  },
+}
 
-  const toggle = useCallback(() => {
-    if (listening) stop()
-    else start()
-  }, [listening, start, stop])
-
-  return { supported, listening, error, heard, start, stop, toggle }
+/** hook React: estado vivo del motor (sin efectos secundarios) */
+export function useVoice(): VoiceState & { toggle: () => void } {
+  const snap = useSyncExternalStore(voiceEngine.subscribe, voiceEngine.getSnapshot, voiceEngine.getSnapshot)
+  return { ...snap, toggle: voiceEngine.toggle }
 }

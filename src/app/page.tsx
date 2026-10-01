@@ -1,14 +1,15 @@
 'use client'
 
-// Emma Care Studio — página principal
-// Editor visual de juegos para niños: arrastra → suelta → configura → juega.
-//
-// Responsive:
-//  · Móvil/tablet (<lg): lienzo arriba (40vh) + pestañas 🧸 Objetos / ⚙️ Ajustes / 🧩 Reglas
-//  · Escritorio (lg+): biblioteca | lienzo | propiedades en columnas + reglas abajo
+// Emma Care Studio — página principal (v0.8: ¡el juego es el prota!)
+// · El lienzo ocupa TODA la pantalla (móvil horizontal y escritorio).
+// · Controles esenciales en un dock flotante pequeñito.
+// · Todo lo demás vive en la mochila: panel oculto que aparece tocando
+//   el lado derecho de la página (submenu apilable).
+// · Escritorio (lg+) en modo editar: columnas clásicas biblioteca|mundo|ajustes.
 
 import { useEffect } from 'react'
 import { useStudio } from '@/lib/studio/store'
+import { voiceEngine } from '@/lib/studio/voice'
 import { HeaderBar } from '@/components/studio/HeaderBar'
 import { LevelBar } from '@/components/studio/LevelBar'
 import { IntroSplash } from '@/components/studio/IntroSplash'
@@ -17,16 +18,17 @@ import { WorldCanvas } from '@/components/studio/WorldCanvas'
 import { PropertiesPanel } from '@/components/studio/PropertiesPanel'
 import { RulesPanel } from '@/components/studio/RulesPanel'
 import { PlayHUD } from '@/components/studio/PlayHUD'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { RightDrawer } from '@/components/studio/RightDrawer'
 
 export default function Home() {
   const mode = useStudio((s) => s.mode)
-  const mobileTab = useStudio((s) => s.mobileTab)
-  const setMobileTab = useStudio((s) => s.setMobileTab)
 
-  // cargar proyecto guardado al abrir
+  // cargar proyecto guardado al abrir + conectar la VOZ con el motor
   useEffect(() => {
     useStudio.getState().hydrate()
+    voiceEngine.setHandler((text) => {
+      useStudio.getState().voiceCommand(text)
+    })
     // acceso al motor desde la consola (útil para depurar y probar)
     ;(window as unknown as { __emma?: typeof useStudio }).__emma = useStudio
   }, [])
@@ -94,37 +96,12 @@ export default function Home() {
 
       {mode === 'edit' ? (
         <>
-          {/* ===== Móvil / tablet: lienzo + pestañas (en horizontal, lado a lado) ===== */}
-          <div className="emma-mob-edit flex min-h-0 flex-1 flex-col lg:hidden">
-            <div className="emma-mob-canvas h-[42vh] min-h-[250px] shrink-0 px-3 pt-3">
+          {/* ===== Móvil/tablet: el lienzo manda; herramientas en la mochila ===== */}
+          <div className="emma-stage relative min-h-0 flex-1 lg:hidden">
+            <div className="absolute inset-0 px-2 pb-2 pt-2">
               <WorldCanvas />
             </div>
-            <Tabs
-              value={mobileTab}
-              onValueChange={(v) => setMobileTab(v as typeof mobileTab)}
-              className="emma-mob-side flex min-h-0 flex-1 flex-col pt-3"
-            >
-              <TabsList className="mx-3 grid h-11 w-auto shrink-0 grid-cols-3 rounded-full bg-rose-100 p-1">
-                <TabsTrigger value="objetos" className="rounded-full text-xs font-black">
-                  🧸 Objetos
-                </TabsTrigger>
-                <TabsTrigger value="ajustes" className="rounded-full text-xs font-black">
-                  ⚙️ Ajustes
-                </TabsTrigger>
-                <TabsTrigger value="reglas" className="rounded-full text-xs font-black">
-                  🧩 Reglas
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="objetos" className="mt-3 min-h-0 flex-1 px-3">
-                <LibraryPanel className="h-full" />
-              </TabsContent>
-              <TabsContent value="ajustes" className="mt-3 min-h-0 flex-1 px-3">
-                <PropertiesPanel className="h-full" />
-              </TabsContent>
-              <TabsContent value="reglas" className="mt-3 min-h-0 flex-1">
-                <RulesPanel fill className="h-full" />
-              </TabsContent>
-            </Tabs>
+            <RightDrawer mode="edit" />
           </div>
 
           {/* ===== Escritorio: tres columnas + reglas abajo ===== */}
@@ -140,12 +117,14 @@ export default function Home() {
           </div>
         </>
       ) : (
-        <div className="emma-play flex min-h-0 flex-1 flex-col gap-2 p-3 sm:gap-3 sm:p-3">
-          <div className="emma-canvas-play min-h-0 flex-1">
+        /* ===== JUGAR: el mundo llena TODO; dock flotante + mochila ===== */
+        <div className="relative min-h-0 flex-1">
+          <div className="absolute inset-0 p-2">
             <WorldCanvas />
           </div>
           <PlayHUD />
-          {/* en móvil vertical: mejor de lado (el HUD y el mundo se estiran) */}
+          <RightDrawer mode="play" />
+          {/* en móvil vertical: mejor de lado */}
           <div className="emma-rotate pointer-events-none fixed left-1/2 top-12 z-40 hidden max-[1024px]:portrait:block">
             🔄 Gira el móvil: ¡se juega mejor en horizontal!
           </div>

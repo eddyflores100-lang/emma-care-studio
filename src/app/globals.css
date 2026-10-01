@@ -632,3 +632,226 @@ body {
     min-height: 36px !important;
   }
 }
+
+/* ================================================================
+   v0.8 — EL JUEGO MANDA: dock flotante + mochila (panel derecho oculto)
+   ================================================================ */
+
+/* asita visible en el borde derecho: invita a abrir la mochila */
+.emma-edge-tab {
+  position: fixed;
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+  z-index: 45;
+  height: 62px;
+  width: 22px;
+  border: 2px solid #fecdd3;
+  border-right: 0;
+  border-radius: 12px 0 0 12px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  color: #f43f5e;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  line-height: 1;
+  box-shadow: -2px 2px 10px rgba(244, 63, 94, 0.16);
+  animation: emma-tab-nudge 2.4s ease-in-out infinite;
+}
+@keyframes emma-tab-nudge {
+  0%,
+  100% {
+    transform: translateY(-50%) translateX(0);
+  }
+  50% {
+    transform: translateY(-50%) translateX(-3px);
+  }
+}
+
+/* zona invisible: tocar/prender el dedo en el lado derecho de la página */
+.emma-edge-hot {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  z-index: 44;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  touch-action: none;
+}
+
+/* fondo oscurecido detrás de la mochila */
+.emma-drawer-back {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  background: rgba(15, 23, 42, 0.28);
+  backdrop-filter: blur(1px);
+}
+
+/* la mochila: entra deslizándose desde la derecha */
+.emma-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  width: min(84vw, 330px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 2px solid #fecdd3;
+  box-shadow: -10px 0 34px rgba(15, 23, 42, 0.2);
+  transform: translateX(108%);
+  transition: transform 0.26s cubic-bezier(0.32, 0.72, 0.34, 1);
+}
+.emma-drawer-open {
+  transform: none;
+}
+.emma-drawer > header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 2px solid #ffe4e6;
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: #334155;
+}
+.emma-drawer-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  padding: 0.6rem 0.7rem 1.3rem;
+}
+
+/* SUBMENU APILABLE (acordeón): secciones que se pliegan y despliegan */
+.emma-acc {
+  overflow: hidden;
+  border: 2px solid #ffe4e6;
+  border-radius: 1rem;
+  background: #fff;
+}
+.emma-acc > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 900;
+  color: #334155;
+  background: #fff7ed;
+}
+.emma-acc > button.emma-acc-open {
+  background: #ffe4e6;
+  color: #be123c;
+}
+.emma-acc-body {
+  padding: 0.6rem 0.7rem;
+  animation: emma-pop-in 0.18s ease-out;
+}
+
+/* dock flotante: los controles esenciales, pequeñitos y abajo */
+.emma-dock {
+  position: absolute;
+  left: 50%;
+  bottom: calc(0.55rem + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.32rem;
+  max-width: calc(100vw - 1.1rem);
+  overflow-x: auto;
+  padding: 0.3rem 0.45rem;
+  border: 2px solid #fecdd3;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.93);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 22px rgba(244, 63, 94, 0.18);
+}
+.emma-dock-pet {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  padding: 0.16rem 0.45rem 0.16rem 0.28rem;
+  border: 2px solid #fecdd3;
+  border-radius: 999px;
+  background: #fff1f2;
+  font-size: 0.66rem;
+  font-weight: 900;
+  color: #475569;
+}
+.emma-dock-pet[data-on='1'] {
+  border-color: #f43f5e;
+  background: #f43f5e;
+  color: #fff;
+}
+.emma-dock-pet[data-on='1'] .text-violet-600 {
+  color: #fff;
+}
+.emma-dock-btn {
+  display: flex;
+  height: 2.55rem;
+  width: 2.55rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #fde68a;
+  border-radius: 999px;
+  background: #fffbeb;
+  font-size: 1.12rem;
+  transition: transform 0.1s;
+}
+.emma-dock-btn:active {
+  transform: scale(0.92);
+}
+.emma-dock-btn[data-cool='1'] {
+  opacity: 0.35;
+}
+.emma-dock-sep {
+  width: 2px;
+  height: 1.5rem;
+  flex-shrink: 0;
+  border-radius: 2px;
+  background: #ffe4e6;
+}
+
+/* h-13 no existe en Tailwind: botones de cuidado un poco más altos */
+.h-13 {
+  height: 3.25rem;
+}
+
+/* móvil HORIZONTAL: mochila más angosta, dock bajito y discretito */
+@media (orientation: landscape) and (max-height: 520px) {
+  .emma-drawer {
+    width: min(46vw, 330px);
+  }
+  .emma-edge-tab {
+    height: 50px;
+    width: 20px;
+  }
+  .emma-dock {
+    bottom: calc(0.35rem + env(safe-area-inset-bottom, 0px));
+    padding: 0.2rem 0.35rem;
+    gap: 0.26rem;
+  }
+  .emma-dock-btn {
+    height: 2.25rem;
+    width: 2.25rem;
+    font-size: 1rem;
+  }
+  .emma-voice-cap {
+    bottom: calc(3rem + env(safe-area-inset-bottom, 0px));
+    font-size: 10px;
+  }
+}
