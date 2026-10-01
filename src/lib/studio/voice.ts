@@ -1,16 +1,22 @@
 'use client'
 
-// Emma Care Studio — comandos por VOZ (Web Speech API) v2
+// Emma Care Studio — comandos por VOZ (Web Speech API) v3
 // La niña habla y sus mascotas obedecen. Todo funciona MIENTRAS SUENA:
 //  · "¡Quietos!"            → se acaban las peleas y todos se congelan
+//  · "¡Salgan!" / "¡Fuera!"  → salen de la casa al patio
 //  · "¡Escondeos!" / refugio → corren a esconderse
 //  · "¡Ven!" / "¡Aquí!"     → vienen hacia la dueña
 //  · "¡Sentado!"            → se sientan
 //  · "¡Max!" (su nombre)    → contesta y viene
-//  · "¡Max a la casa!"      → Max camina hasta la casita (también cama,
-//                             agua o comida)
+//  · "¡Max a la casa!"      → Max ENTRA en la casita y se queda quieto
+//                             (también cama, agua o comida)
 //  · "hospital"             → la más herida viaja en ambulancia
 //  · "pelota"               → prepara el lanzamiento
+//
+// PRIORIDAD DE ÓRDENES (para diferenciarlas claramente entre sí):
+//   calm > out > hide > goto(destino) > hospital > ball > sit > come > call
+//   Así «ven a la casa» = IR a la casa (destino gana a ven),
+//   pero «¡ven!» a secas = venir hacia la dueña.
 //
 // Motor SINGLETON: vive fuera de React para que pueda arrancar solo
 // (dentro del gesto de tocar ▶ ¡JUGAR!) y sobrevivir a los renders.
@@ -59,6 +65,10 @@ const WORDS = {
   ],
   sit: ['sentado', 'sentados', 'sentate', 'sientate', 'sientense', 'sienta'],
   come: ['ven', 'ven aqui', 'ven aca', 'aqui', 'aca', 'vengan', 'vengan aqui', 'vamos'],
+  out: [
+    'salgan', 'salid', 'salgan fuera', 'salgan de la casa', 'sal de la casa',
+    'fuera', 'afuera', 'vamos afuera', 'salgan ya', 'fuera de ahi', 'salgan al jardin',
+  ],
   hospital: ['hospital', 'ambulancia', 'medico', 'doctora', 'cura', 'curar'],
   ball: ['pelota', 'bola', 'lanza la pelota', 'tira la pelota', 'trae la pelota'],
 } as const
@@ -128,19 +138,26 @@ function findPetsByName(text: string, pets: WorldObject[]): { named: WorldObject
   return { named, name }
 }
 
-/** interpreta lo que se dijo y decide qué orden es y a quién va dirigida */
+/** interpreta lo que se dijo y decide qué orden es y a quién va dirigida.
+ *  Las órdenes se diferencian por PRIORIDAD estricta, así nunca se pisan:
+ *  quietos > salgan > escondeos > destino > hospital > pelota > sentado > ven > nombre */
 export function parseVoiceCommand(raw: string, pets: WorldObject[]): ParsedVoice | null {
   const t = norm(raw)
   if (!t) return null
   const { named, name } = findPetsByName(t, pets)
-  // 1) destinos ("a la casa") — antes que las demás para que "casa" no se pierda
+  // 1) ¡QUIETOS! — el interruptor de emergencia, gana a todo
+  if (wordHit(t, WORDS.calm)) return { kind: 'calm', named, matchedName: name }
+  // 2) ¡SALEN! — salir de la casa
+  if (wordHit(t, WORDS.out)) return { kind: 'out', named, matchedName: name }
+  // 3) ¡ESCONDEOS! — gana al destino («escondeos en la casa» = esconderse)
+  if (wordHit(t, WORDS.hide)) return { kind: 'hide', named, matchedName: name }
+  // 4) destino («a la casa») — ANTES que ven/sentado: «ven a la casa» = ir a la casa
   const destHit = DESTS.find((d) => d.words.some((w) => wordHit(t, [w])))
-  // 2) órdenes normales
-  const kind = (['calm', 'hide', 'hospital', 'sit', 'come', 'ball'] as const).find((k) =>
-    wordHit(t, WORDS[k]),
-  )
-  if (kind) return { kind, named, matchedName: name }
   if (destHit) return { kind: 'goto', named, matchedName: name, dest: destHit.dest }
+  // 5) el resto de órdenes simples
+  const kind = (['hospital', 'ball', 'sit', 'come'] as const).find((k) => wordHit(t, WORDS[k]))
+  if (kind) return { kind, named, matchedName: name }
+  // 6) solo un nombre → la mascota contesta y viene
   if (named.length) return { kind: 'call', named, matchedName: name }
   return null
 }

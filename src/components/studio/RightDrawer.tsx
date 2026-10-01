@@ -43,6 +43,7 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
   const playerAction = useStudio((s) => s.playerAction)
   const giveCommand = useStudio((s) => s.giveCommand)
   const sendToHospital = useStudio((s) => s.sendToHospital)
+  const voiceCommand = useStudio((s) => s.voiceCommand)
   const toggleBallMode = useStudio((s) => s.toggleBallMode)
   const actionCd = useStudio((s) => s.actionCd)
 
@@ -193,6 +194,14 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
           </div>
           <button
             type="button"
+            onClick={() => voiceCommand('¡salgan de la casa!')}
+            className="flex w-full items-center justify-center gap-1.5 rounded-2xl border-2 border-sky-300 bg-sky-50 py-2 text-xs font-black text-sky-700 transition-all active:scale-95"
+            title="Saca a las mascotas que están dentro de la casita"
+          >
+            🚪 ¡Salgan de la casa!
+          </button>
+          <button
+            type="button"
             onClick={toggleBallMode}
             className={cn(
               'flex w-full items-center justify-center gap-1.5 rounded-2xl border-2 py-2 text-xs font-black transition-all active:scale-95',
@@ -205,9 +214,11 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
             <p className="mb-1 font-black text-sky-700">🎙️ Prueba a decirle:</p>
             <p>«¡Quietos!» — dejan de pelear al instante</p>
             <p>«¡Max!» — contesta y viene hacia ti</p>
-            <p>«Max a la casa» — camina hasta la casita</p>
+            <p>«Max a la casa» — ENTRA en la casita y se queda quietecito</p>
+            <p>«¡Salgan!» — salen todos de la casita</p>
             <p>«¡Escondeos!» — buscan refugio</p>
             <p>«a comer» · «a la cama» · «toma agua»</p>
+            <p>«ven a la casa» — va a la casa (no hacia ti)</p>
           </div>
         </div>
       ),

@@ -208,3 +208,25 @@ Work Log:
 
 Stage Summary:
 - TODO DEPLOYADO Y VERIFICADO: https://emmacare.alicelabs.site vive con v0.8 completa (voz + fullscreen + mochila derecha); repo remoto == local (7a8eceb); 8/8 workflow runs success
+
+---
+Task ID: 10
+Agent: Super Z (main)
+Task: v0.9 — Órdenes de voz CLARAMENTE diferenciadas + la casita es de verdad (mandarlos DENTRO, se quedan tranquilos, sin travesuras)
+
+Work Log:
+- BUG 1 (parser): «ven a la casa» activaba VEN (venía hacia la dueña) en vez de IR a la casa → parser v3 con prioridad estricta: calm > out > hide > goto(destino) > hospital > ball > sit > come > call. «ven a la casa» ahora = GOTO ✓
+- BUG 2 (la casa): al llegar a la casa la mascota quedaba idle y a los 3s volvía a deambular/hacer travesuras → ahora ENTRA en la casita (PetRuntime.inside = id de la casa): invisible, state rest, SIN auto-despertar, sin peleas (excluida de rivales predador/presa), sin deambular (moveTick skip)
+- Nueva orden de voz «¡salgan! / ¡fuera! / ¡afuera!» (kind 'out'): salen de la casita al patio; también salen con «¡ven!» o su nombre
+- Panel de la casa (HousePanel.tsx nuevo): tocar la casita (o su badge 🐶🐱💤) → «¿quién está dentro?» con estado (😴 tranquila / 🩹 curándose) + botón ¡Fuera! por mascota + ¡Sacar a todos!
+- Badge en la casita: emojis de quienes están dentro + 💤 (animado, táctil)
+- Chip de ORDEN reconocida en la pastilla del micrófono: cada orden tiene color propio (🛑 QUIETOS rojo, 🏡 A LA CASA ámbar, 🚪 SALEN cielo, 👋 ¡MAX! turquesa, etc.) — Emma VE qué orden entendió el juego
+- goto cama ahora = acostarse a DORMIR de verdad (state sleep) en vez de quedarse al lado
+- RightDrawer: botón 🚪 «¡Salgan de la casa!» + pistas nuevas (ven a la casa, salgan)
+- Reglas de peleas excluyen mascotas inside (ni predador ni presa); las heridas que entran en casa siguen curándose (healAt intacto)
+- Premios intactos: +2🪙 al llegar por obedecer; reposo NO despertable solos (dentro = hasta que la llamen)
+- Pruebas agent-browser: «misi ven a la casa»→GOTO Misi ✓; Max+Misi ENTRARON (inside=CASITA, rest) ✓; invisibles (0 sprites) + badge 🐶🐱💤 ✓; panel con 2 dentro + ¡Sacar a todos! → salen y visibles ✓; quietos→🛑 QUIETOS ✓; «¡max!»→👋 ¡MAX! ✓; escondeos→🙈 ✓; sentado pinky→🪑 ✓; pinky/max a la cama→🛏️ y state sleep ✓; herido va solo al refugio (dinámica v0.6 intacta) ✓; 0 errores JS; lint limpio; build export OK; móvil 390px OK
+- Capturas: emma9-voz-casa.png, emma9-panel-casa.png, emma9-final.png, emma9-movil.png, emma9-badge-casa.png
+
+Stage Summary:
+- Emma Care Studio v0.9.0: las órdenes de voz se diferencian CLARAMENTE entre sí (con chip visual por orden) y la casa es de verdad: «Max a la casa» lo manda DENTRO donde se queda tranquilo (sin travesuras, sin peleas), se le ve con el badge 🐶🐱💤, y tocando la casa se abre el panel para ver quiénes hay y sacarlos

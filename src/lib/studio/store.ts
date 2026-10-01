@@ -124,6 +124,7 @@ function makeRuntime(): PetRuntime {
     toyAt: 0,
     voiceAt: 0,
     goTo: null,
+    inside: null,
     pairCd: {},
     chaseUntil: 0,
     chaseRole: null,
@@ -294,6 +295,10 @@ interface StudioState {
   ballPending: boolean
   /** mientras now < shakeUntil, el lienzo tiembla (¡persecuciones!) */
   shakeUntil: number
+  // ===== voz: la última orden reconocida (para que se VEA qué orden entendió) =====
+  lastVoice: { kind: string; label: string; at: number } | null
+  // ===== la casita: panel de «¿quién está dentro?» (id del objeto casa) =====
+  housePanel: string | null
   // ===== autoguardado =====
   /** momento del último autoguardado (0 = aún no) — para el indicador ✓ */
   lastSavedAt: number
@@ -331,6 +336,12 @@ interface StudioState {
   calmAll: (x: number, y: number) => boolean
   /** órdenes por VOZ: ¡Quietos! ¡Escondeos! ¡Ven! ¡Sentado! o llamarlas por nombre */
   voiceCommand: (raw: string) => VoiceOutcome
+  /** abrir el panel «¿quién está dentro de la casa?» */
+  openHouse: (id: string) => void
+  /** cerrar el panel de la casa */
+  closeHouse: () => void
+  /** sacar de la casa a una mascota (petId) o a todas ('all') */
+  comeOutOf: (houseId: string, petId?: string) => void
   /** activar/desactivar el modo lanzar pelota */
   toggleBallMode: () => void
   /** lanzar la pelota a un punto del mundo */
@@ -396,6 +407,8 @@ export const useStudio = create<StudioState>((set, get) => {
     ballPending: false,
     shakeUntil: 0,
     lastSavedAt: 0,
+    lastVoice: null,
+    housePanel: null,
 
     hydrate: () => {
       if (get().hydrated) return
@@ -561,6 +574,8 @@ export const useStudio = create<StudioState>((set, get) => {
         ballPending: false,
         shakeUntil: 0,
         selectedId: null,
+        lastVoice: null,
+        housePanel: null,
       })
       sfx.happy()
       // 🎙️ arranca la escucha en el MISMO gesto del clic (el micrófono
@@ -590,6 +605,8 @@ export const useStudio = create<StudioState>((set, get) => {
         ball: null,
         ballPending: false,
         shakeUntil: 0,
+        lastVoice: null,
+        housePanel: null,
       })
     },
 
@@ -1206,16 +1223,41 @@ export const useStudio = create<StudioState>((set, get) => {
       const allPets = s.objects.filter((o) => isPetObj(o) && o.level === s.currentLevel)
       const parsed = parseVoiceCommand(raw, allPets)
       if (!parsed) {
+        set({ lastVoice: { kind: 'unknown', label: '🤔 no entendí', at: now } })
         if (now - (s.actionCd['voice:unknown'] ?? 0) > 3200) {
           set({ actionCd: { ...s.actionCd, 'voice:unknown': now } })
           toast(
-            '🤔 No entendí. Di: ¡Quietos! · ¡Escondeos! · ¡Ven! · ¡Sentado! · su nombre · pelota',
+            '🤔 No entendí. Di: ¡Quietos! · ¡Escondeos! · ¡Ven! · ¡Sentado! · ¡Salgan! · su nombre · «a la casa» · pelota',
             { id: 'voice-unknown', duration: 3200 },
           )
         }
         return 'unknown'
       }
       const { kind, named, matchedName, dest } = parsed
+
+      // 🎙️ ORDEN RECONOCIDA con categoría clara — se ve en la pastilla del micrófono
+      const orderCat: Record<string, string> = {
+        calm: '🛑 QUIETOS',
+        out: '🚪 ¡SALEN!',
+        hide: '🙈 ESCONDEOS',
+        hospital: '🚑 HOSPITAL',
+        ball: '🎾 PELOTA',
+        sit: '🪑 SENTADO',
+        come: '🐾 VEN',
+      }
+      const destCat: Record<string, string> = {
+        casa: '🏡 A LA CASA',
+        cama: '🛏️ A LA CAMA',
+        agua: '💧 AL AGUA',
+        comida: '🥣 A COMER',
+      }
+      const orderLabel =
+        kind === 'goto'
+          ? (destCat[dest ?? ''] ?? '👉 DESTINO')
+          : kind === 'call'
+            ? `👋 ¡${(matchedName ?? '').toUpperCase()}!`
+            : (orderCat[kind] ?? '👉 ORDEN')
+      set({ lastVoice: { kind, label: `${orderLabel} → ${matchedName ?? 'todos'}`, at: now } })
 
       // anti-repetición (la escucha provisional dispara varias veces igual):
       // cada orden y mascota tiene sus segundos mínimos entre disparos
@@ -1226,7 +1268,9 @@ export const useStudio = create<StudioState>((set, get) => {
             ? 4500
             : kind === 'hide' || kind === 'goto'
               ? 4000
-              : 3000
+              : kind === 'out'
+                ? 3500
+                : 3000
       const cdKey = `voice:${kind}:${matchedName ?? 'todos'}`
       if (now - (s.actionCd[cdKey] ?? 0) < gap) return 'ok'
       const actionCd = { ...s.actionCd, [cdKey]: now, 'voice:unknown': now }
@@ -1234,9 +1278,12 @@ export const useStudio = create<StudioState>((set, get) => {
       const pets = { ...s.pets }
       const spawn = get().spawnParticles
       // las que reposan (hospital/cama) no se levantan: ¡están curándose!
+      // PERO las que están DENTRO de la casita sí responden a «ven» y «salgan»
       const disponibles = (named.length ? named : allPets).filter((p) => {
         const rt = s.pets[p.id]
-        return rt && rt.state !== 'rest'
+        if (!rt) return false
+        if (rt.inside) return kind === 'come' || kind === 'call' || kind === 'out'
+        return rt.state !== 'rest'
       })
 
       // ===== ¡QUIETOS! — se acaban TODAS las peleas y todos se congelan =====
@@ -1273,19 +1320,69 @@ export const useStudio = create<StudioState>((set, get) => {
         return 'ok'
       }
 
+      // ===== ¡SALEN! — salen de la casita al patio =====
+      if (kind === 'out') {
+        set({ actionCd })
+        const dentro = (named.length ? named : allPets).filter((p) => s.pets[p.id]?.inside)
+        if (!dentro.length) {
+          toast('🏠 Nadie está dentro de la casita ahora mismo', { duration: 2600 })
+          return 'ok'
+        }
+        const objects = s.objects.map((o) => ({ ...o }))
+        for (const p of dentro) {
+          const rt0 = pets[p.id]
+          if (!rt0) continue
+          const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
+          const casaObj = objects.find((o) => o.id === rt.inside)
+          rt.inside = null
+          rt.state = 'idle'
+          rt.restUntil = 0
+          rt.wanderAt = now + 2500
+          rt.obey = null
+          const objOut = objects.find((o) => o.id === p.id)
+          if (casaObj && objOut) {
+            objOut.x = clampPct(casaObj.x + 10)
+            objOut.y = clampPct(casaObj.y + 7)
+          }
+          spawn('🚪', p.x, p.y - 4, 1)
+          speak(set, get, p, 'feliz')
+          set({ say: { ...get().say, [p.id]: { text: '¡Ya salí! 🐾', until: now + 2400 } } })
+          pets[p.id] = rt
+        }
+        set({ pets, objects, actionCd })
+        sfx.pop()
+        vib(40)
+        toast(`🚪 ¡SALEN, ${label}! Ya están en el patio`, { duration: 2800 })
+        return 'ok'
+      }
+
       // ===== "¡MAX A LA CASA!" — caminar hasta un lugar del mundo =====
       if (kind === 'goto' && dest) {
         set({ actionCd })
         const lvlObjs = s.objects.filter((o) => o.level === s.currentLevel)
         const ref = (named[0] ?? disponibles[0] ?? allPets[0]) as WorldObject | undefined
-        let spot: { x: number; y: number } | null = null
+        let spot: WorldObject | { x: number; y: number } | null = null
+        let spotId: string | null = null
         if (dest === 'casa') {
           // "casa" = la casita de verdad; si no hay, vale cualquier refugio
-          const casa = lvlObjs.find((o) => !isPetObj(o) && o.catalogId === 'house')
-          spot = casa ?? (ref ? nearestShelter(lvlObjs, ref) : null)
-        } else if (dest === 'cama') spot = findSpecial(lvlObjs, 'bed') ?? null
-        else if (dest === 'agua') spot = findSpecial(lvlObjs, 'water') ?? null
-        else spot = findSpecial(lvlObjs, 'food') ?? null
+          const casa =
+            lvlObjs.find((o) => !isPetObj(o) && o.catalogId === 'house') ??
+            (ref ? nearestShelter(lvlObjs, ref) : null)
+          spot = casa
+          spotId = casa?.id ?? null
+        } else if (dest === 'cama') {
+          const b = findSpecial(lvlObjs, 'bed')
+          spot = b ?? null
+          spotId = b?.id ?? null
+        } else if (dest === 'agua') {
+          const w = findSpecial(lvlObjs, 'water')
+          spot = w ?? null
+          spotId = w?.id ?? null
+        } else {
+          const f = findSpecial(lvlObjs, 'food')
+          spot = f ?? null
+          spotId = f?.id ?? null
+        }
         if (!spot) {
           toast(
             dest === 'casa'
@@ -1297,7 +1394,12 @@ export const useStudio = create<StudioState>((set, get) => {
         }
         const grupo = named.length ? named : disponibles
         if (!grupo.length) {
-          toast('😴 Todas están reposando… las escucharán al despertar', { duration: 2800 })
+          toast(
+            named.some((p) => s.pets[p.id]?.inside)
+              ? `🏠 ¡${label} ya está dentro de la casita! Di «¡salgan!» para sacarle`
+              : '😴 Todas están reposando… las escucharán al despertar',
+            { duration: 3200 },
+          )
           return 'ok'
         }
         for (const p of grupo) {
@@ -1330,7 +1432,7 @@ export const useStudio = create<StudioState>((set, get) => {
           rt.tx = spot.x
           rt.ty = clampPct(spot.y + 5)
           rt.targetKind = 'goto'
-          rt.goTo = { dest, until: now + 25000 }
+          rt.goTo = { dest, until: now + 25000, spotId }
           rt.wanderAt = now + 25000
           rt.obey = null
           spawn('👉', p.x, p.y - 4, 1)
@@ -1340,7 +1442,7 @@ export const useStudio = create<StudioState>((set, get) => {
         sfx.treat()
         vib(40)
         const hacia: Record<string, string> = {
-          casa: 'a la casita 🏠',
+          casa: 'a ENTRAR en la casita 🏠',
           cama: 'a la cama 🛏️',
           agua: 'a tomar agua 💧',
           comida: 'a comer 🥣',
@@ -1380,11 +1482,20 @@ export const useStudio = create<StudioState>((set, get) => {
       // ===== ÓRDENES DE MOVIMIENTO A UN GRUPO (escondeos / ven / sentado) =====
       let coins = s.coins
       let alguna = false
+      const exits: Array<{ petId: string; casa: WorldObject }> = []
       for (const p of disponibles) {
         const rt0 = pets[p.id]
         if (!rt0) continue
         alguna = true
         const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
+        // si estaba DENTRO de la casita, sale para obedecer (y se le ve otra vez)
+        if (rt.inside) {
+          const casaObj = s.objects.find((o) => o.id === rt.inside)
+          rt.inside = null
+          rt.restUntil = 0
+          if (casaObj) exits.push({ petId: p.id, casa: casaObj })
+          spawn('🚪', p.x, p.y - 4, 1)
+        }
         // la obediencia salva: si la están persiguiendo, se acaba la persecución
         if (rt.chaseUntil > now && rt.chasePartner) {
           const partner = s.objects.find((o) => o.id === rt.chasePartner)
@@ -1449,7 +1560,21 @@ export const useStudio = create<StudioState>((set, get) => {
         set({ actionCd })
         return 'ok'
       }
-      set({ pets, coins, actionCd })
+      set({
+        pets,
+        coins,
+        actionCd,
+        ...(exits.length
+          ? {
+              objects: s.objects.map((o) => {
+                const ex = exits.find((e) => e.petId === o.id)
+                return ex
+                  ? { ...o, x: clampPct(ex.casa.x + 10), y: clampPct(ex.casa.y + 7) }
+                  : { ...o }
+              }),
+            }
+          : {}),
+      })
       sfx.treat()
       vib(40)
       const msg =
@@ -1457,9 +1582,55 @@ export const useStudio = create<StudioState>((set, get) => {
           ? `🎙️ ¡Escondeos, ${label}! Corriendo a buscar refugio`
           : kind === 'sit'
             ? `🎙️ ¡Sentado, ${label}! Qué bien obedecen`
-            : `🎙️ ¡Ven, ${label}! Van corriendo hacia ti 🐾`
+            : kind === 'call'
+              ? `🎙️ ¡${matchedName ?? label}! Atiende y va hacia ti 🐾`
+              : `🎙️ ¡Ven, ${label}! Van corriendo hacia ti 🐾`
       toast(msg, { duration: 2800 })
       return 'ok'
+    },
+
+    openHouse: (id) => {
+      sfx.click()
+      set({ housePanel: id })
+    },
+
+    closeHouse: () => set({ housePanel: null }),
+
+    comeOutOf: (houseId, petId) => {
+      const s = get()
+      const now = Date.now()
+      const casaObj = s.objects.find((o) => o.id === houseId)
+      if (!casaObj) return
+      const dentro = Object.entries(s.pets).filter(
+        ([pid, rt]) =>
+          rt.inside === houseId && (!petId || petId === 'all' || petId === pid),
+      )
+      if (!dentro.length) {
+        toast('🏠 Ya no queda nadie dentro', { duration: 2200 })
+        set({ housePanel: null })
+        return
+      }
+      const objects = s.objects.map((o) => ({ ...o }))
+      const pets = { ...s.pets }
+      for (const [pid, rt0] of dentro) {
+        const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
+        rt.inside = null
+        rt.state = 'idle'
+        rt.restUntil = 0
+        rt.wanderAt = now + 2000
+        const objOut = objects.find((o) => o.id === pid)
+        if (objOut) {
+          objOut.x = clampPct(casaObj.x + 10)
+          objOut.y = clampPct(casaObj.y + 7)
+          speak(set, get, objOut, 'feliz')
+          get().spawnParticles('🚪', objOut.x, objOut.y - 4, 1)
+        }
+        pets[pid] = rt
+      }
+      set({ pets, objects, housePanel: petId && petId !== 'all' ? houseId : null })
+      sfx.pop()
+      vib(40)
+      toast('🚪 ¡Ya están en el patio!', { duration: 2200 })
     },
 
     moveTick: (dtMs) => {
@@ -1499,6 +1670,13 @@ export const useStudio = create<StudioState>((set, get) => {
 
         // reposo (en la casita o en la camilla del hospital): quietecito
         if (rt.state === 'rest') {
+          pets[obj.id] = rt
+          continue
+        }
+
+        // DENTRO de la casita: no se mueve, no juega, no travesuras.
+        // Descansa hasta que la dueña la llame («¡ven!», «¡salgan!»)
+        if (rt.inside) {
           pets[obj.id] = rt
           continue
         }
@@ -1922,17 +2100,50 @@ export const useStudio = create<StudioState>((set, get) => {
               get().spawnParticles('💤', obj.x, obj.y - 4, 1)
             } else if (rt.targetKind === 'goto' && rt.goTo) {
               // ¡llegó al lugar que le dijeron por voz! premio por obedecer
+              const g = rt.goTo
               const destEmoji =
-                rt.goTo.dest === 'casa'
+                g.dest === 'casa'
                   ? '🏠'
-                  : rt.goTo.dest === 'cama'
+                  : g.dest === 'cama'
                     ? '🛏️'
-                    : rt.goTo.dest === 'agua'
+                    : g.dest === 'agua'
                       ? '💧'
                       : '🥣'
               rt.goTo = null
-              rt.state = 'idle'
-              rt.wanderAt = now + 3000
+              obj.x = clampPct(rt.tx)
+              obj.y = clampPct(rt.ty)
+              moved = true
+              if (g.dest === 'casa' && g.spotId) {
+                // 🏠 ¡ENTRA en la casita! Ahí dentro se queda TRANQUILA:
+                // descansa, no deambula, no pelea, no hace travesuras.
+                // Sale solo cuando la dueña la llama («¡Max ven!», «¡salgan!»)
+                rt.inside = g.spotId
+                rt.state = 'rest'
+                rt.restUntil = now + 3600000
+                const casaObj = objects.find((o) => o.id === g.spotId)
+                if (casaObj) {
+                  obj.x = casaObj.x
+                  obj.y = clampPct(casaObj.y + 2)
+                }
+                get().spawnParticles('🚪', obj.x, obj.y - 6, 2)
+                speak(set, get, obj, 'feliz')
+                toast(`🏠 ¡${obj.name} entró en la casita! Toca la casa para ver quién está dentro`, {
+                  duration: 3600,
+                })
+              } else if (g.dest === 'cama' && g.spotId) {
+                // 🛏️ ¡a dormir! se queda en la cama hasta recuperar descanso
+                rt.state = 'sleep'
+                get().spawnParticles('💤', obj.x, obj.y - 4, 2)
+                speak(set, get, obj, 'normal')
+                toast(`🛏️ ¡${obj.name} se acostó a dormir!`, { duration: 2600 })
+              } else {
+                rt.state = 'idle'
+                rt.wanderAt = now + 3000
+                get().spawnParticles(destEmoji, obj.x, obj.y - 4, 2)
+                get().spawnParticles('✨', obj.x, obj.y - 1, 1)
+                speak(set, get, obj, 'feliz')
+                toast(`🐾 ¡${obj.name} llegó! +2 🪙 por obedecer`, { duration: 2400 })
+              }
               if (!rt.sick && !rt.injured) {
                 coins += 2
                 const lvGo = gainXp(rt, 6)
@@ -1941,10 +2152,6 @@ export const useStudio = create<StudioState>((set, get) => {
                   celebrateLevel(set, get, obj, lvGo)
                 }
               }
-              get().spawnParticles(destEmoji, obj.x, obj.y - 4, 2)
-              get().spawnParticles('✨', obj.x, obj.y - 1, 1)
-              speak(set, get, obj, 'feliz')
-              toast(`🐾 ¡${obj.name} llegó! +2 🪙 por obedecer`, { duration: 2400 })
               sfx.treat()
             } else {
               rt.state = 'idle'
@@ -2007,6 +2214,7 @@ export const useStudio = create<StudioState>((set, get) => {
           prt.obey ||
           prt.sick ||
           prt.injured ||
+          prt.inside ||
           prt.stats.energia < 12
         )
           continue
@@ -2022,6 +2230,7 @@ export const useStudio = create<StudioState>((set, get) => {
             yrt.obey ||
             yrt.sick ||
             yrt.injured ||
+            yrt.inside ||
             yrt.hiding ||
             yrt.onTopOf
           )
@@ -2181,7 +2390,9 @@ export const useStudio = create<StudioState>((set, get) => {
             get().spawnParticles(rt.injured || rt.sick ? '❤️‍🩹' : '💤', obj.x, obj.y - 5, 1)
           }
           const healDue = (rt.injured || rt.sick) && now >= rt.healAt
-          const restOver = !rt.injured && !rt.sick && now >= rt.restUntil
+          // las que están DENTRO de la casita no se levantan solas:
+          // ahí se quedan tranquilas hasta que la dueña las llame
+          const restOver = !rt.inside && !rt.injured && !rt.sick && now >= rt.restUntil
           if (healDue || restOver) {
             const inHosp = obj.level === 'hospital' && obj.home && obj.home !== obj.level
             rt.injured = false

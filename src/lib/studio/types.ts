@@ -152,8 +152,14 @@ export interface PetRuntime {
   onTopOf: string | null
   // ===== órdenes del dueño (sentado, quieto, ven) =====
   obey: { cmd: Command; until: number } | null
-  /** orden por voz con destino: "¡Max a la casa!" — camina hasta el lugar indicado */
-  goTo: { dest: 'casa' | 'cama' | 'agua' | 'comida'; until: number } | null
+  /** orden por voz con destino: "¡Max a la casa!" — camina hasta el lugar indicado.
+   *  spotId: id del objeto-destino (la casita) para poder ENTRAR en él al llegar */
+  goTo: { dest: 'casa' | 'cama' | 'agua' | 'comida'; until: number; spotId?: string | null } | null
+  // ===== la casita es de verdad: se pueden MANDAR DENTRO =====
+  /** si no es null: la mascota está DENTRO de este objeto (la casa). Ahí dentro
+   *  descansa tranquila: no deambula, no pelea, no hace travesuras. Sale solo
+   *  cuando la dueña la llama («¡Max ven!», «¡salgan!») o desde el panel de la casa */
+  inside: string | null
 }
 
 export interface Particle {
