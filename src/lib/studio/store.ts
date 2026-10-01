@@ -23,6 +23,8 @@ import {
   WorldObject,
 } from './types'
 import { voiceEngine } from './voice'
+import { petPersonality } from './personality'
+import { stepAround } from './navigation'
 import {
   LEVELS,
   PET_NAMES,
@@ -46,6 +48,14 @@ const rand = (a: number, b: number) => a + Math.random() * (b - a)
 
 /** duración de una persecución (ms): ¡ahora cruzan TODA la pantalla! */
 const CHASE_MS = 7800
+export const TREATMENT_COST = 15
+const ROAM_AREAS = [[8, 12], [90, 85], [10, 88], [88, 15], [50, 50]] as const
+function explore(rt: PetRuntime, pet: WorldObject) {
+  const offset = Array.from(pet.id).reduce((sum, c) => sum + c.charCodeAt(0), 0) % ROAM_AREAS.length
+  const area = ROAM_AREAS[(rt.roamStep++ + offset) % ROAM_AREAS.length]
+  rt.tx = clampPct(area[0] + rand(-3, 3)); rt.ty = clampPct(area[1] + rand(-3, 3))
+  rt.targetKind = 'random'; rt.state = 'walk'
+}
 
 // ===== HERIDAS Y HOSPITAL =====
 /** curación descansando en casa (lenta) */
@@ -124,6 +134,7 @@ function makeRuntime(): PetRuntime {
     toyAt: 0,
     voiceAt: 0,
     goTo: null,
+    inside: null, hospitalStatus: null, roamStep: 0, bonds:{},
     pairCd: {},
     chaseUntil: 0,
     chaseRole: null,
@@ -143,6 +154,7 @@ function projectState(data: SavedProject): Partial<StudioState> {
     const rt = makeRuntime()
     if (saved) {
       Object.assign(rt, { stats: { ...saved.stats }, lvl: saved.lvl, xp: saved.xp,
+        bonds:{...saved.bonds}, inside: saved.inside ?? null, hospitalStatus: saved.hospitalStatus ?? (obj.level === 'hospital' && (saved.injured || saved.sick) ? 'waiting' : null),
         injured: saved.injured, sick: saved.sick, state: saved.state,
         healAt: now + saved.healRemaining, restUntil: now + saved.restRemaining,
         obey: saved.hold ? {cmd:saved.hold.cmd,until:saved.hold.remaining === null ? Infinity : now + saved.hold.remaining}
@@ -151,7 +163,7 @@ function projectState(data: SavedProject): Partial<StudioState> {
     rt.tx = obj.x; rt.ty = obj.y
     pets[obj.id] = rt
   }
-  return { objects: data.objects, rules: data.rules, coins: data.coins, pets,
+  return { careMissions:data.careMissions ?? {alimentar:0,acariciar:0,banar:0}, objects: data.objects, rules: data.rules, coins: data.coins, pets,
     unlockedLevels: data.unlockedLevels ?? ['jardin'], currentLevel: data.currentLevel ?? 'jardin' }
 }
 
@@ -260,26 +272,6 @@ function markInjured(set: StoreSet, get: StoreGet, pet: WorldObject, rt: PetRunt
   )
 }
 
-/** cuando una mascota se cura en el hospital, vuelve solita a su mundo en ambulancia */
-function returnHomeAfterHeal(set: StoreSet, get: StoreGet, petId: string, home: LevelId) {
-  setTimeout(() => {
-    const st = get()
-    if (st.mode !== 'play') return
-    const pet = st.objects.find((o) => o.id === petId)
-    if (!pet || pet.level !== 'hospital' || pet.home !== home || !st.pets[petId] || st.pets[petId].injured) return
-    set({
-      objects: st.objects.map((o) => (o.id === petId ? { ...o, level: home } : o)),
-      pets: {
-        ...st.pets,
-        [petId]: { ...st.pets[petId], state: 'idle', wanderAt: Date.now() },
-      },
-    })
-    get().spawnParticles('🚑', pet.x, pet.y - 5, 2)
-    toast(`🚑 ¡${pet.name} volvió a casa curado/a!`, { duration: 3200 })
-    sfx.happy()
-  }, 2600)
-}
-
 export type MobileTab = 'objetos' | 'ajustes' | 'reglas'
 
 interface StudioState {
@@ -291,6 +283,7 @@ interface StudioState {
   /** pestaña activa del editor en móvil (pantallas < lg) */
   mobileTab: MobileTab
   coins: number
+  careMissions: Record<'alimentar' | 'acariciar' | 'banar',number>
   muted: boolean
   /** mundo actual y mundos desbloqueados */
   currentLevel: LevelId
@@ -312,12 +305,20 @@ interface StudioState {
   ball: Ball | null
   /** modo lanzar pelota: el próximo toque en el mundo la lanza */
   ballPending: boolean
+  ballPetId: string | null
   /** mientras now < shakeUntil, el lienzo tiembla (¡persecuciones!) */
   shakeUntil: number
   // ===== autoguardado =====
   /** momento del último autoguardado (0 = aún no) — para el indicador ✓ */
   lastSavedAt: number
   saveError: boolean
+  lastVoice: { kind: string; label: string; at: number } | null
+  ownerPoint: { x: number; y: number }
+  setOwnerPoint: (x: number, y: number) => void
+  housePanel: string | null
+  openHouse: (id: string) => void
+  closeHouse: () => void
+  comeOutOf: (houseId: string, petId?: string) => void
 
   hydrate: () => void
   addObject: (catalogId: string, x?: number, y?: number) => void
@@ -353,7 +354,7 @@ interface StudioState {
   /** el dueño toca la pantalla: ¡se acaban las persecuciones! Devuelve true si calmió algo */
   calmAll: (x: number, y: number) => boolean
   /** órdenes por VOZ: ¡Quietos! ¡Escondeos! ¡Ven! ¡Sentado! o llamarlas por nombre */
-  voiceCommand: (raw: string) => VoiceOutcome
+  voiceCommand: (raw: string, targetId?: string) => VoiceOutcome
   /** activar/desactivar el modo lanzar pelota */
   toggleBallMode: () => void
   /** lanzar la pelota a un punto del mundo */
@@ -404,6 +405,7 @@ export const useStudio = create<StudioState>((set, get) => {
     selectedId: null,
     mobileTab: 'objetos',
     coins: 0,
+    careMissions:{alimentar:0,acariciar:0,banar:0},
     muted: false,
     currentLevel: 'jardin',
     unlockedLevels: ['jardin'],
@@ -416,10 +418,12 @@ export const useStudio = create<StudioState>((set, get) => {
     event: null,
     nextEventAt: 0,
     ball: null,
-    ballPending: false,
+    ballPending: false, ballPetId: null,
     shakeUntil: 0,
     lastSavedAt: 0,
     saveError: false,
+    lastVoice: null, housePanel: null,
+    ownerPoint: {x:50,y:84}, setOwnerPoint: (x,y) => set({ownerPoint:{x:clampPct(x),y:clampPct(y)}}),
 
     hydrate: () => {
       if (get().hydrated) return
@@ -466,7 +470,7 @@ export const useStudio = create<StudioState>((set, get) => {
         y: clampPct(y ?? rand(30, 70)),
         size: item.kind === 'pet' ? 1.3 : item.kind === 'home' ? 1.4 : 1.1,
         hue: 0,
-        speed: item.kind === 'pet' ? 8 : undefined,
+        speed: item.kind === 'pet' ? petPersonality({catalogId,id:'new'}).speed : undefined,
         level: s.currentLevel,
       }
       if (s.mode === 'play' && item.kind === 'pet') {
@@ -500,7 +504,9 @@ export const useStudio = create<StudioState>((set, get) => {
         pets:
           obj && isPetObj(obj)
             ? Object.fromEntries(Object.entries(s.pets).filter(([k]) => k !== id))
-            : s.pets,
+            : Object.fromEntries(Object.entries(s.pets).map(([pid,rt]) => [pid, rt.inside === id
+              ? {...rt,inside:null,state:'idle',restUntil:0,wanderAt:Date.now()} : rt])),
+        housePanel: s.housePanel === id ? null : s.housePanel,
       })
       sfx.click()
     },
@@ -521,7 +527,7 @@ export const useStudio = create<StudioState>((set, get) => {
       if (!def) return
       if (s.unlockedLevels.includes(id)) {
         if (s.currentLevel === id) return
-        set({ currentLevel: id, selectedId: null, say: {} })
+        set({ currentLevel: id, selectedId: null, say: {}, housePanel: null })
         sfx.pop()
         toast(`${def.emoji} ¡Bienvenido/a a ${def.name}!`)
         return
@@ -561,6 +567,7 @@ export const useStudio = create<StudioState>((set, get) => {
       }
       set({
         mode: 'play',
+        lastVoice: null, housePanel: null,
         pets,
         particles: [],
         say: {},
@@ -570,7 +577,7 @@ export const useStudio = create<StudioState>((set, get) => {
         event: null,
         nextEventAt: now + rand(35000, 60000),
         ball: null,
-        ballPending: false,
+        ballPending: false, ballPetId: null,
         shakeUntil: 0,
         selectedId: null,
       })
@@ -600,13 +607,14 @@ export const useStudio = create<StudioState>((set, get) => {
       }])) as Record<string, PetRuntime>
       set({
         mode: 'edit',
+        lastVoice: null, housePanel: null,
         pets,
         particles: [],
         say: {},
         selectedId: null,
         event: null,
         ball: null,
-        ballPending: false,
+        ballPending: false, ballPetId: null,
         shakeUntil: 0,
       })
       get().saveSilent()
@@ -679,7 +687,7 @@ export const useStudio = create<StudioState>((set, get) => {
         localStorage.setItem(SAVE_KEY, JSON.stringify(data))
         voiceEngine.stop()
         set({ ...next, hydrated: true, mode: 'edit', selectedId: null, particles: [],
-          say: {}, ruleAcc: {}, actionCd: {}, ball: null, ballPending: false,
+          say: {}, ruleAcc: {}, actionCd: {}, ball: null, ballPending: false, ballPetId: null,
           event: null, shakeUntil: 0, lastSavedAt: Date.now(), saveError: false })
         toast('📂 ¡Mundo recuperado! Tu progreso y tus mascotas están aquí.')
         return true
@@ -701,8 +709,9 @@ export const useStudio = create<StudioState>((set, get) => {
       voiceEngine.stop()
       const blank = makeBlankProject()
       set({ objects: blank.objects, rules: blank.rules, coins: 0, selectedId: null,
+        careMissions:{alimentar:0,acariciar:0,banar:0},housePanel:null,lastVoice:null,ownerPoint:{x:50,y:84},
         pets: {}, particles: [], say: {}, mode: 'edit', currentLevel: 'jardin',
-        unlockedLevels: ['jardin'], event: null, ball: null, ballPending: false,
+        unlockedLevels: ['jardin'], event: null, ball: null, ballPending: false, ballPetId: null,
         ruleAcc: {}, actionCd: {}, shakeUntil: 0 })
       get().saveSilent()
       toast('🆕 ¡Mundo nuevo! Puedes recuperar el anterior con ↩️ Recuperar.')
@@ -841,31 +850,18 @@ export const useStudio = create<StudioState>((set, get) => {
           }
           break
         case 'curar':
-          // las HERIDAS solo se curan en el hospital (o descansando mucho en casa)
-          if (rt.injured && s.currentLevel !== 'hospital') {
-            toast(`🏥 ${pet.name} está herido/a: llévalo al hospital con 🚑 (o que descanse en casa)`, {
-              duration: 4500,
-            })
-            return
+          if (pet.level !== 'hospital') {
+            toast(`🏥 Lleva a ${pet.name} al hospital para tratarlo (15 🪙)`); return
           }
-          if (!rt.sick && !rt.injured) {
-            toast(`😊 ${pet.name} está sano/a`)
-            return
+          if (rt.hospitalStatus === 'treating') { toast('🩺 El tratamiento está en marcha'); return }
+          if (!rt.sick && !rt.injured) { toast(`😊 ${pet.name} está sano/a; puede recibir el alta con una orden de viaje`); return }
+          if (coins < TREATMENT_COST) {
+            toast(`🪙 Faltan ${TREATMENT_COST - coins} monedas. Alimenta, acaricia o baña a tus mascotas para ganarlas.`); return
           }
-          {
-            const inHosp = s.currentLevel === 'hospital'
-            rt.injured = false
-            rt.sick = false
-            rt.state = 'idle'
-            rt.wanderAt = now
-            rt.stats.felicidad = clamp(rt.stats.felicidad + 10)
-            get().spawnParticles('💊', pet.x, pet.y - 3, 3)
-            sfx.magic()
-            coins += 6
-            if (inHosp && pet.home && pet.home !== pet.level) {
-              returnHomeAfterHeal(set, get, pet.id, pet.home)
-            }
-          }
+          coins -= TREATMENT_COST
+          rt.hospitalStatus = 'treating'; rt.state = 'rest'; rt.inside = null
+          rt.obey = null; rt.goTo = null; rt.healAt = now + HEAL_HOSPITAL_MS; rt.restUntil = rt.healAt
+          sfx.magic(); toast(`🩺 Tratamiento de ${pet.name}: 25 segundos · −15 🪙`)
           break
       }
 
@@ -907,7 +903,7 @@ export const useStudio = create<StudioState>((set, get) => {
         }
       }
 
-      if (action !== 'dormir' && action !== 'curar' && !rt.sick) {
+      if (action !== 'dormir' && action !== 'curar') {
         const rewards: Record<string, number> = {
           alimentar: 3,
           acariciar: 2,
@@ -917,7 +913,22 @@ export const useStudio = create<StudioState>((set, get) => {
         coins += rewards[action] ?? 0
       }
 
-      set({ pets: { ...s.pets, [pet.id]: rt }, coins, actionCd })
+      const pets = {...s.pets,[pet.id]:rt}
+      const careMissions = {...s.careMissions}
+      if (action === 'alimentar' || action === 'acariciar' || action === 'banar') {
+        careMissions[action]++
+        if (careMissions[action] === 3) {
+          careMissions[action] = 0; coins += 5
+          toast('🎯 ¡Misión de cuidado completada! +5 🪙')
+        }
+        rt.bonds = {...rt.bonds}
+        for (const other of s.objects.filter(o => isPetObj(o) && o.id !== pet.id && o.level === pet.level && Math.hypot(o.x-pet.x,o.y-pet.y)<30)) {
+          const friend = pets[other.id]; if (!friend) continue
+          rt.bonds[other.id] = Math.min(100,(rt.bonds[other.id] ?? 0)+2)
+          pets[other.id] = {...friend,bonds:{...friend.bonds,[pet.id]:Math.min(100,(friend.bonds[pet.id] ?? 0)+2)}}
+        }
+      }
+      set({ pets, coins, actionCd, careMissions })
     },
 
     /** acariciar con el dedo: frotar la mascota en la pantalla */
@@ -970,91 +981,10 @@ export const useStudio = create<StudioState>((set, get) => {
 
     /** dar una orden al dueño: ¡sentado! ¡quieto! ¡ven! (premio por obediencia) */
     giveCommand: (cmd) => {
-      const s = get()
-      if (s.mode !== 'play') return
-      const pet = s.objects.find((o) => o.id === s.selectedId && isPetObj(o))
-      if (!pet) {
-        toast('👆 Primero toca una mascota para darle la orden')
-        return
-      }
-      const rt0 = s.pets[pet.id]
-      if (!rt0) return
-      const now = Date.now()
-      const cdKey = `${pet.id}:cmd`
-      if (now - (s.actionCd[cdKey] ?? 0) < 2500) {
-        toast('⏳ ¡Un poquito de espera!')
-        return
-      }
-      const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
-      let coins = s.coins
-      const actionCd = { ...s.actionCd, [cdKey]: now }
-      const newPets = { ...s.pets }
-
-      // ¡la obediencia salva! si lo están persiguiendo, se acaba la persecución
-      let stoppedChase = false
-      if (rt.chaseUntil > now && rt.chasePartner) {
-        stoppedChase = true
-        const partner = s.objects.find((o) => o.id === rt.chasePartner)
-        const prt = partner ? s.pets[partner.id] : null
-        rt.chaseUntil = 0
-        rt.chaseRole = null
-        rt.chasePartner = null
-        rt.hiding = null
-        rt.onTopOf = null
-        if (partner && prt) {
-          newPets[partner.id] = {
-            ...prt,
-            chaseUntil: 0,
-            chaseRole: null,
-            chasePartner: null,
-            pairCd: {
-              ...prt.pairCd,
-              [`rival:${partner.id}:${pet.id}`]: now,
-            },
-          }
-          speak(set, get, partner, 'triste')
-        }
-      }
-
-      rt.obey = {
-        cmd,
-        until: now + (cmd === 'sit' ? 6000 : cmd === 'stay' ? 8000 : cmd === 'hide' ? 7000 : 5000),
-      }
-      rt.state = 'idle'
-      rt.wanderAt = now + 10000
-
-      const cmdMsg =
-        cmd === 'sit'
-          ? '🪑 ¡Sentado!'
-          : cmd === 'stay'
-            ? '✋ ¡Quieto!'
-            : cmd === 'hide'
-              ? '🙈 ¡Escondeos!'
-              : '👉 ¡Ven aquí!'
-      get().spawnParticles(
-        cmd === 'sit' ? '🪑' : cmd === 'stay' ? '✋' : cmd === 'hide' ? '🙈' : '👉',
-        pet.x,
-        pet.y - 4,
-        1,
-      )
-
-      // premio por buen comportamiento (+XP: ¡así sube de nivel!)
-      if (!rt.sick) {
-        coins += 2
-        const lv = gainXp(rt, 6)
-        if (lv) {
-          coins += 10
-          celebrateLevel(set, get, pet, lv)
-        }
-        if (Math.random() < 0.45) get().spawnParticles('🦴', pet.x, pet.y - 2, 1)
-      }
-      speak(set, get, pet, 'normal')
-      sfx.treat()
-      toast(
-        `${cmdMsg} — ¡${pet.name} obedeció! +2 🪙${stoppedChase ? ' 😎 ¡escapó del rival!' : ''}`,
-        { duration: 3000 },
-      )
-      set({ pets: { ...newPets, [pet.id]: rt }, coins, actionCd })
+      const s = get(), pet = s.objects.find(o => o.id === s.selectedId && isPetObj(o))
+      if (!pet) { toast('👆 Selecciona una mascota'); return }
+      const word = {stay:'quieto',sit:'sentado',come:'ven',hide:'escondeos',run:'corre',walk:'pasea',jump:'salta',dance:'baila',follow:'sígueme'}[cmd]
+      get().voiceCommand(`${pet.name} ${word}`, pet.id)
     },
 
     /** llevar en ambulancia a la mascota herida/enferma al hospital (requiere desbloquearlo) */
@@ -1072,40 +1002,13 @@ export const useStudio = create<StudioState>((set, get) => {
         sfx.sad()
         return
       }
-      const now = Date.now()
-      const objects = s.objects.map((o) =>
-        o.id === id ? { ...o, level: 'hospital' as LevelId, home: o.home ?? o.level, x: rand(12, 32), y: rand(58, 78) } : o,
-      )
-      const rt: PetRuntime = {
-        ...rt0,
-        chaseUntil: 0,
-        chaseRole: null,
-        chasePartner: null,
-        hiding: null,
-        onTopOf: null,
-        obey: null,
-        state: 'idle',
-        targetKind: 'random',
-        wanderAt: now,
-      }
-      set({ objects, pets: { ...s.pets, [id]: rt } })
-      sfx.whoosh()
-      vib(70)
-      get().spawnParticles('🚑', pet.x, pet.y - 5, 2)
-      toast(`🚑 ¡Llevan a ${pet.name} al hospital! Viaja con él para acompañarlo`, {
-        duration: 4000,
-      })
-      // el dueño viaja con la mascota para verla curarse
-      setTimeout(() => {
-        const st = get()
-        if (st.mode === 'play' && !st.unlockedLevels.includes('hospital')) return
-        st.setLevel('hospital')
-      }, 1400)
+      get().voiceCommand(`${pet.name} al hospital`, pet.id)
+      if (get().objects.find(o => o.id === id)?.level === 'hospital') get().setLevel('hospital')
     },
 
     toggleBallMode: () => {
       const next = !get().ballPending
-      set({ ballPending: next })
+      set({ ballPending: next,ballPetId:null })
       if (next) {
         toast('🎾 ¡Toca el mundo donde quieras lanzar la pelota!', { duration: 3500 })
         sfx.click()
@@ -1115,7 +1018,7 @@ export const useStudio = create<StudioState>((set, get) => {
     throwBallAt: (x, y) => {
       const s = get()
       if (s.mode !== 'play') return
-      const ball: Ball = { id: uid(), x, y, until: Date.now() + 12000 }
+      const ball: Ball = { targetId:s.ballPetId, id: uid(), x, y, until: Date.now() + 12000 }
       set({ ball, ballPending: false })
       sfx.whoosh()
       setTimeout(() => sfx.boing(), 350)
@@ -1160,33 +1063,8 @@ export const useStudio = create<StudioState>((set, get) => {
     /** El dueño toca la pantalla: ¡aplauso calmante! Termina TODAS las persecuciones */
     calmAll: (x, y) => {
       const s = get()
-      if (s.mode !== 'play') return false
-      const now = Date.now()
-      // OJO: PetRuntime no tiene campo id — la clave del mapa ES el id
-      const chasing = Object.entries(s.pets).filter(([, rt]) => rt.chaseUntil > now)
-      if (!chasing.length) return false
-      const pets = { ...s.pets }
-      for (const [petId, rt] of chasing) {
-        // cooldown para que el par no vuelva a pelear enseguida
-        if (rt.chasePartner) {
-          const predId = rt.chaseRole === 'chase' ? petId : rt.chasePartner
-          const preyId = rt.chaseRole === 'chase' ? rt.chasePartner : petId
-          const prt = pets[predId]
-          if (prt)
-            pets[predId] = {
-              ...prt,
-              pairCd: { ...prt.pairCd, [`rival:${predId}:${preyId}`]: now },
-            }
-        }
-        // chaseUntil = ahora → el motor la termina con su lógica normal (premios incluidos)
-        const cur = pets[petId]
-        if (cur) pets[petId] = { ...cur, chaseUntil: now }
-      }
-      set({ pets, shakeUntil: 0 })
-      get().spawnParticles('👏', x, y, 2)
-      get().spawnParticles('💙', x, y - 5, 1)
-      sfx.happy()
-      toast('👏 ¡Aplaudiste fuerte! Todos se calmaron 💙', { duration: 2600 })
+      if (s.mode !== 'play' || !s.objects.some(o => o.level === s.currentLevel && s.pets[o.id]?.chaseUntil > Date.now())) return false
+      get().voiceCommand('quietos'); get().spawnParticles('👏',x,y,2)
       return true
     },
 
@@ -1201,16 +1079,20 @@ export const useStudio = create<StudioState>((set, get) => {
      *  · "pelota"           → prepara el lanzamiento
      * Si nombró a una mascota, solo esa obedece (y gana premio); si no, todas.
      */
-    voiceCommand: (raw) => {
+    voiceCommand: (raw, targetId) => {
       const s = get()
       const now = Date.now()
       if (s.mode !== 'play') return 'noplay'
       const allPets = s.objects.filter(isPetObj)
       const visible = allPets.filter(o => o.level === s.currentLevel)
-      const parsed = parseVoiceCommand(raw, allPets)
-      if (!parsed) return 'unknown'
+      const parsed = parseVoiceCommand(raw, targetId ? allPets.filter(p => p.id === targetId) : allPets)
+      if (!parsed) {
+        set({lastVoice:{kind:'unknown',label:'🤔 Revisa el nombre; si hay varios de la misma especie, usa un nombre único',at:now}})
+        return 'unknown'
+      }
       const { kind, named, matchedName, dest, level } = parsed
-      const targets = named.length ? named : visible
+      const targets = targetId ? allPets.filter(p => p.id === targetId) : named.length ? named : visible
+      set({ lastVoice: {kind, label: `${kind === 'travel' ? '🐾 Viaje' : kind === 'calm' ? '✋ Quieto' : kind === 'out' ? '🚪 Fuera' : kind === 'goto' ? '👉 ' + dest : '🎙️ ' + kind} → ${matchedName ?? 'todos'}`, at: now} })
       if (!targets.length) return 'unknown'
       const cdKey = `voice:${kind}:${dest ?? level ?? ''}:${targets.map(p => p.id).sort().join(',')}`
       if (now - (s.actionCd[cdKey] ?? 0) < 700) return 'ok'
@@ -1252,7 +1134,11 @@ export const useStudio = create<StudioState>((set, get) => {
         const obj = objects.find(o => o.id === p.id)!
         const rt = pets[p.id]
         if (!rt) return
+        if (rt.hospitalStatus === 'waiting' || rt.hospitalStatus === 'treating') {
+          answer(p, rt.hospitalStatus === 'waiting' ? 'Necesito tratamiento (15 🪙) antes del alta 🩺' : 'Mi tratamiento sigue en marcha 🩺'); return false
+        }
         cancelChase(p.id)
+        rt.inside = null; rt.hospitalStatus = null
         const origin = obj.level
         obj.level = destination
         // Healthy visitors remain in the hospital. Medical patients return
@@ -1263,10 +1149,11 @@ export const useStudio = create<StudioState>((set, get) => {
         rt.goTo = null; rt.obey = null; rt.state = 'idle'; rt.wanderAt = now
         rt.tx = obj.x; rt.ty = obj.y
         if (destination === 'hospital' && (rt.injured || rt.sick)) {
-          rt.state = 'rest'; rt.healAt = now + HEAL_HOSPITAL_MS; rt.restUntil = rt.healAt
+          rt.hospitalStatus = 'waiting'; rt.state = 'rest'; rt.healAt = Infinity; rt.restUntil = Infinity
           const bed = nearestBed(objects.filter(o => o.level === destination), obj)
           if (bed) { obj.x = bed.x; obj.y = clampPct(bed.y + 4) }
         }
+        return true
       }
       if (kind === 'travel' && level) {
         if (!s.unlockedLevels.includes(level)) {
@@ -1275,7 +1162,7 @@ export const useStudio = create<StudioState>((set, get) => {
           return 'ok'
         }
         for (const p of targets) {
-          transfer(p, level)
+          if (!transfer(p, level)) continue
           answer(p, `¡Estoy en ${LEVELS.find(l => l.id === level)?.name}!`)
         }
         set({ objects, pets, actionCd, shakeUntil: 0 })
@@ -1284,8 +1171,18 @@ export const useStudio = create<StudioState>((set, get) => {
         toast(`🐾 ${matchedName ?? 'Tus mascotas'}: viaje a ${LEVELS.find(l => l.id === level)?.name}`)
         return 'ok'
       }
+      if (kind === 'treat') {
+        for (const p of targets) {
+          if (p.level !== 'hospital') { answer(p, 'Primero llévame al hospital 🏥'); continue }
+          const selected = get().selectedId; get().select(p.id); get().playerAction('curar'); get().select(selected)
+        }
+        return 'ok'
+      }
       if (kind === 'ball') {
-        set({ actionCd, ballPending: true }); toast('🎾 Toca el mundo para lanzar la pelota')
+        const chosen = named[0]
+        if (chosen && (chosen.level !== s.currentLevel || pets[chosen.id]?.injured || pets[chosen.id]?.hospitalStatus === 'waiting' || pets[chosen.id]?.hospitalStatus === 'treating')) { answer(chosen,'Necesito estar aquí y sano para traer la pelota 🩹'); return 'ok' }
+        if (chosen && pets[chosen.id]) { cancelChase(chosen.id); pets[chosen.id].obey=null; pets[chosen.id].inside=null; pets[chosen.id].state='idle'; pets[chosen.id].goTo=null }
+        set({ pets, actionCd, ballPending: true,ballPetId:chosen?.id ?? null }); toast('🎾 Toca el mundo para lanzar la pelota')
         return 'ok'
       }
       if (kind === 'jump') sfx.jump()
@@ -1297,28 +1194,44 @@ export const useStudio = create<StudioState>((set, get) => {
         if (!rt) continue
         // Names can be called from any unlocked world. Other commands leave
         // remote pets where they are, except an explicit travel order.
-        if (p.level !== s.currentLevel && (kind === 'come' || kind === 'call')) {
+        if (p.level !== s.currentLevel && (kind === 'come' || kind === 'call' || kind === 'follow')) {
           if (rt.injured && rt.state === 'rest') { answer(p, 'Estoy descansando para curarme 🩹'); continue }
-          transfer(p, s.currentLevel); obj = objects.find(o => o.id === p.id)!
+          if (!transfer(p, s.currentLevel)) continue
+          obj = objects.find(o => o.id === p.id)!
+        }
+        if (kind === 'greet') {
+          const greetings = ['¡Hola! Me alegra verte 🐾', '¡Aquí estoy! ¿Jugamos? 💛', '¡Hola, soy ' + p.name + '! 👋']
+          const count = rt.pairCd.greetings ?? 0; rt.pairCd.greetings = count + 1
+          answer(p, greetings[(count + p.name.length) % greetings.length]); continue
+        }
+        if (kind === 'out') {
+          if (rt.inside) { rt.inside = null; rt.state = 'idle'; rt.restUntil = 0; rt.wanderAt = now; answer(p, '¡Ya salí de la casita! 🚪') }
+          else answer(p, '¡Estoy fuera de la casita! 🐾')
+          continue
         }
         if (kind === 'calm') {
           const resting = rt.state === 'rest' || rt.state === 'sleep'
           cancelChase(p.id, true)
-          if (!resting) { rt.state = 'idle'; rt.obey = { cmd: 'stay', until: Infinity } }
+          if (!resting) rt.state = 'idle'
+          rt.obey = { cmd: 'stay', until: Infinity }
           rt.goTo = null; rt.wanderAt = Infinity
           answer(p, '¡Me quedo quieto! ✋ Di libre o ven para moverme.')
           continue
         }
+        if (rt.hospitalStatus === 'waiting' || rt.hospitalStatus === 'treating') {
+          answer(p, rt.hospitalStatus === 'waiting' ? '¡Aquí estoy! Esperando tratamiento (15 🪙) 🩺' : '¡Aquí estoy! Me están curando 🩺'); continue
+        }
         if (rt.state === 'rest' && rt.injured) {
           answer(p, '¡Aquí estoy! Descansando para curarme 🩹'); continue
         }
+        if (rt.inside) { rt.inside = null; rt.state = 'idle'; rt.restUntil = 0 }
         if (kind === 'goto' && dest) {
           const nearby = objects.filter(o => o.level === obj.level)
           const spot = dest === 'casita' ? nearby.find(o => o.catalogId === 'house')
             : findSpecial(nearby, dest === 'cama' ? 'bed' : dest === 'agua' ? 'water' : dest === 'bano' ? 'bath' : 'food')
           if (!spot) { answer(p, 'No encuentro ese objeto aquí. Añádelo en Editar.'); continue }
           cancelChase(p.id)
-          rt.obey = null; rt.goTo = { dest, until: now + 30000 }; rt.state = 'walk'; rt.wanderAt = now + 30000
+          rt.obey = null; rt.goTo = { dest, until: now + 30000, spotId: spot.id }; rt.state = 'walk'; rt.wanderAt = now + 30000
           rt.tx = spot.x; rt.ty = clampPct(spot.y + 4)
           rt.targetKind = dest === 'cama' ? 'bed' : dest === 'agua' ? 'water' : dest === 'comida' ? 'food' : dest === 'casita' ? 'shelter' : 'random'
           answer(p, `¡Voy ${dest === 'cama' ? 'a dormir' : dest === 'agua' ? 'a beber' : dest === 'comida' ? 'a comer' : dest === 'bano' ? 'a bañarme' : 'a la casita'}!`)
@@ -1334,19 +1247,63 @@ export const useStudio = create<StudioState>((set, get) => {
           if (rt.injured) { rt.state = 'rest'; answer(p, 'Todavía necesito reposo 🩹') }
           else answer(p, kind === 'free' ? '¡Ya puedo moverme! 🐾' : '¡Ya desperté! ☀️')
         } else {
-          const cmd: Command = kind === 'call' || kind === 'come' ? 'come' : kind === 'sit' ? 'sit'
+          const cmd: Command = kind === 'follow' ? 'follow' : kind === 'call' || kind === 'come' ? 'come' : kind === 'sit' ? 'sit'
             : kind === 'hide' ? 'hide' : kind === 'run' ? 'run' : kind === 'walk' ? 'walk'
             : kind === 'jump' ? 'jump' : 'dance'
-          rt.obey = { cmd, until: cmd === 'sit' ? Infinity : now + (cmd === 'come' ? 20000 : cmd === 'hide' ? 12000 : 8000) }
+          rt.obey = { cmd, until: cmd === 'sit' || cmd === 'follow' ? Infinity : now + (cmd === 'come' ? 20000 : cmd === 'hide' ? 12000 : 8000) }
           rt.wanderAt = now; rt.tx = obj.x < 50 ? 94 : 6; rt.ty = obj.y < 50 ? 92 : 8
-          answer(p, cmd === 'come' ? '¡Aquí voy! 🐾' : cmd === 'sit' ? '¡Me siento! 🪑'
+          answer(p, cmd === 'come' ? petPersonality(p).greeting : cmd === 'sit' ? '¡Me siento! 🪑'
             : cmd === 'hide' ? '¡Me escondo! 🙈' : cmd === 'run' ? '¡A correr! 💨'
-            : cmd === 'walk' ? '¡De paseo! 🐾' : cmd === 'jump' ? '¡Salto! 🐾' : '¡A bailar! 🎵')
+            : cmd === 'follow' ? '¡Te sigo! Toca el suelo para guiarme 🐾' : cmd === 'walk' ? '¡De paseo! 🐾' : cmd === 'jump' ? '¡Salto! 🐾' : '¡A bailar! 🎵')
         }
       }
       set({ objects, pets, actionCd, shakeUntil: kind === 'calm' ? 0 : s.shakeUntil })
       vib(40)
       return 'ok'
+    },
+
+    openHouse: (id) => {
+      sfx.click()
+      set({ housePanel: id })
+    },
+
+    closeHouse: () => set({ housePanel: null }),
+
+    comeOutOf: (houseId, petId) => {
+      const s = get()
+      const now = Date.now()
+      const casaObj = s.objects.find((o) => o.id === houseId)
+      if (!casaObj) return
+      const dentro = Object.entries(s.pets).filter(
+        ([pid, rt]) =>
+          rt.inside === houseId && (!petId || petId === 'all' || petId === pid),
+      )
+      if (!dentro.length) {
+        toast('🏠 Ya no queda nadie dentro', { duration: 2200 })
+        set({ housePanel: null })
+        return
+      }
+      const objects = s.objects.map((o) => ({ ...o }))
+      const pets = { ...s.pets }
+      for (const [pid, rt0] of dentro) {
+        const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats }, pairCd: { ...rt0.pairCd } }
+        rt.inside = null
+        rt.state = 'idle'
+        rt.restUntil = 0
+        rt.wanderAt = now + 2000
+        const objOut = objects.find((o) => o.id === pid)
+        if (objOut) {
+          objOut.x = clampPct(casaObj.x + 10)
+          objOut.y = clampPct(casaObj.y + 7)
+          speak(set, get, objOut, 'feliz')
+          get().spawnParticles('🚪', objOut.x, objOut.y - 4, 1)
+        }
+        pets[pid] = rt
+      }
+      set({ pets, objects, housePanel: petId && petId !== 'all' ? houseId : null })
+      sfx.pop()
+      vib(40)
+      toast('🚪 ¡Ya están en el patio!', { duration: 2200 })
     },
 
     moveTick: (dtMs) => {
@@ -1391,6 +1348,7 @@ export const useStudio = create<StudioState>((set, get) => {
           rt.state = 'idle'; rt.wanderAt = now
         }
 
+        if (rt.inside) { pets[obj.id] = rt; continue }
         if (rt.state === 'sleep') {
           pets[obj.id] = rt
           continue
@@ -1484,19 +1442,18 @@ export const useStudio = create<StudioState>((set, get) => {
           rt.obey = null
         }
         if (rt.obey) {
-          if (rt.obey.cmd === 'come') {
-            const dx = 50 - obj.x
-            const dy = 84 - obj.y
+          if (rt.obey.cmd === 'come' || rt.obey.cmd === 'follow') {
+            const dx = s.ownerPoint.x - obj.x
+            const dy = s.ownerPoint.y - obj.y
             const dist = Math.hypot(dx, dy)
             const step = (obj.speed ?? 8) * 1.7 * dt
             if (dist <= Math.max(1.5, step)) {
               rt.state = 'idle'
-              rt.obey = { cmd: 'stay', until: now + 2500 }
+              if (rt.obey.cmd !== 'follow') rt.obey = { cmd: 'stay', until: now + 2500 }
               rt.wanderAt = now + 2500
               get().spawnParticles('⭐', obj.x, obj.y - 4, 1)
             } else {
-              obj.x = clampPct(obj.x + (dx / dist) * step)
-              obj.y = clampPct(obj.y + (dy / dist) * step)
+              Object.assign(obj, stepAround(obj,s.ownerPoint,step,levelObjs))
               if (Math.abs(dx) > 0.5) rt.facing = dx > 0 ? 1 : -1
               rt.state = 'walk'
               moved = true
@@ -1513,7 +1470,7 @@ export const useStudio = create<StudioState>((set, get) => {
                 rt.tx = obj.x < 50 ? rand(75, 95) : rand(5, 25)
                 rt.ty = obj.y < 50 ? rand(75, 95) : rand(5, 25)
               } else {
-                obj.x = clampPct(obj.x + dx / distance * step); obj.y = clampPct(obj.y + dy / distance * step)
+                Object.assign(obj,stepAround(obj,{x:rt.tx,y:rt.ty},step,levelObjs))
                 rt.facing = dx >= 0 ? 1 : -1; rt.state = 'walk'; moved = true
               }
             }
@@ -1702,7 +1659,8 @@ export const useStudio = create<StudioState>((set, get) => {
         // ===== ¡A POR LA PELOTA! (el perro y el zorro la traen) =====
         if (
           ball &&
-          (obj.catalogId === 'dog' || obj.catalogId === 'fox') &&
+          !ballCaught &&
+          (ball.targetId ? obj.id === ball.targetId : (obj.catalogId === 'dog' || obj.catalogId === 'fox')) &&
           !rt.chaseUntil &&
           !rt.injured
         ) {
@@ -1765,12 +1723,6 @@ export const useStudio = create<StudioState>((set, get) => {
               rt.restUntil = now + 16000
               rt.healAt = now + (s.currentLevel === 'hospital' ? HEAL_HOSPITAL_MS : HEAL_HOME_MS)
             }
-          } else if (s.currentLevel === 'hospital' && bed && Math.random() < 0.55) {
-            // en el hospital todos pasan por la camilla a reposar un rato
-            rt.tx = bed.x
-            rt.ty = Math.min(95, bed.y + 6)
-            rt.targetKind = 'shelter'
-            rt.state = 'walk'
           } else if (rt.stats.comida < 50 && food) {
             rt.tx = food.x
             rt.ty = Math.min(95, food.y + 6)
@@ -1803,10 +1755,7 @@ export const useStudio = create<StudioState>((set, get) => {
             rt.targetKind = 'random'
             rt.state = 'walk'
           } else {
-            rt.tx = rand(5, 95)
-            rt.ty = rand(5, 95)
-            rt.targetKind = 'random'
-            rt.state = 'walk'
+            explore(rt, obj)
           }
         }
 
@@ -1818,8 +1767,13 @@ export const useStudio = create<StudioState>((set, get) => {
           const step = (obj.speed ?? 8) * dt * (rt.injured ? 0.45 : rt.stats.energia < 20 ? 0.65 : 1)
           if (dist <= Math.max(1.5, step)) {
             const destination = rt.goTo?.dest
+            const spotId = rt.goTo?.spotId
             rt.goTo = null
-            if (destination === 'bano') {
+            if (destination === 'casita' && spotId) {
+              rt.inside = spotId; rt.state = 'rest'; rt.restUntil = Infinity
+              rt.healAt = rt.injured || rt.sick ? now + HEAL_HOME_MS : 0
+              rt.obey = null; sfx.pop()
+            } else if (destination === 'bano') {
               sfx.water()
               rt.stats.higiene = clamp(rt.stats.higiene + 30)
               rt.state = 'idle'; rt.wanderAt = now + 3000
@@ -1846,11 +1800,10 @@ export const useStudio = create<StudioState>((set, get) => {
               get().spawnParticles('💤', obj.x, obj.y - 4, 1)
             } else {
               rt.state = 'idle'
-              rt.wanderAt = now + rand(1500, 4500)
+              rt.wanderAt = now + petPersonality(obj).pause + rand(0, 800)
             }
           } else {
-            obj.x = clampPct(obj.x + (dx / dist) * step)
-            obj.y = clampPct(obj.y + (dy / dist) * step)
+            Object.assign(obj,stepAround(obj,{x:rt.tx,y:rt.ty},step,levelObjs))
             if (Math.abs(dx) > 0.5) rt.facing = dx > 0 ? 1 : -1
             moved = true
           }
@@ -1877,7 +1830,7 @@ export const useStudio = create<StudioState>((set, get) => {
 
         // curiosidad por la pelota (las demás mascotas también juegan)
         if (
-          ball &&
+          ball && (!ball.targetId || ball.targetId === obj.id) &&
           now >= (rt.pairCd['ball'] ?? 0) &&
           Math.hypot(ball.x - obj.x, ball.y - obj.y) < 9
         ) {
@@ -1902,6 +1855,7 @@ export const useStudio = create<StudioState>((set, get) => {
           prt.state === 'rest' ||
           prt.state === 'eat' ||
           prt.chaseUntil > now ||
+          prt.inside ||
           prt.obey ||
           prt.goTo ||
           prt.sick ||
@@ -1918,6 +1872,7 @@ export const useStudio = create<StudioState>((set, get) => {
             yrt.state === 'rest' ||
             yrt.state === 'eat' ||
             yrt.chaseUntil > now ||
+            yrt.inside ||
             yrt.obey ||
             yrt.goTo ||
             yrt.stats.energia < 12 ||
@@ -1930,7 +1885,7 @@ export const useStudio = create<StudioState>((set, get) => {
           const key = `rival:${pred.id}:${prey.id}`
           if (now - (prt.pairCd[key] ?? 0) < 30000) continue
           const dist = Math.hypot(pred.x - prey.x, pred.y - prey.y)
-          if (dist > 11) continue
+          if (dist > 11 || (prt.bonds[prey.id] ?? 0) >= 12 || (yrt.bonds[pred.id] ?? 0) >= 12) continue
           // ¡EMPIEZA LA PERSECUCIÓN!
           prt.pairCd[key] = now
           prt.chaseRole = 'chase'
@@ -2004,6 +1959,14 @@ export const useStudio = create<StudioState>((set, get) => {
         (o) => isPetObj(o) && o.level === s.currentLevel && s.pets[o.id],
       )
 
+      for (const obj of s.objects.filter(o => o.level === 'hospital')) {
+        const rt = pets[obj.id]
+        if (rt?.hospitalStatus === 'treating' && now >= rt.healAt) {
+          pets[obj.id] = {...rt, injured: false, sick: false, hospitalStatus: 'ready', state: 'idle', wanderAt: now}
+          toast(`✅ ${obj.name} tiene el alta en el hospital. Puedes recogerlo.`)
+        }
+      }
+
       // ===== SORPRESAS: lluvia, escasez, mariposa, regalo =====
       let event = s.event
       let nextEventAt = s.nextEventAt
@@ -2058,7 +2021,7 @@ export const useStudio = create<StudioState>((set, get) => {
       }
 
       for (const obj of activePets) {
-        const rt0 = s.pets[obj.id]
+        const rt0 = pets[obj.id]
         const rt: PetRuntime = { ...rt0, stats: { ...rt0.stats } }
         const running = rt.chaseUntil > now || rt.obey?.cmd === 'run' // ¡corriendo en una persecución!
 
@@ -2083,10 +2046,12 @@ export const useStudio = create<StudioState>((set, get) => {
           if (Math.random() < 0.3) {
             get().spawnParticles(rt.injured || rt.sick ? '❤️‍🩹' : '💤', obj.x, obj.y - 5, 1)
           }
-          const healDue = (rt.injured || rt.sick) && now >= rt.healAt
-          const restOver = !rt.injured && !rt.sick && now >= rt.restUntil
+          const healDue = (rt.injured || rt.sick) && rt.healAt > 0 && now >= rt.healAt &&
+            (obj.level !== 'hospital' || rt.hospitalStatus === 'treating')
+          const restOver = !rt.inside && !rt.injured && !rt.sick && now >= rt.restUntil
           if (healDue || restOver) {
-            const inHosp = obj.level === 'hospital' && obj.home && obj.home !== obj.level
+            const inHosp = obj.level === 'hospital'
+            if (inHosp && healDue) rt.hospitalStatus = 'ready'
             rt.injured = false
             rt.sick = false
             rt.state = 'idle'
@@ -2104,7 +2069,7 @@ export const useStudio = create<StudioState>((set, get) => {
               toast(inHosp ? `❤️‍🩹 ¡${obj.name} se curó en el hospital!` : `❤️‍🩹 ¡${obj.name} se curó descansando en casa!`, {
                 duration: 3500,
               })
-              if (inHosp) returnHomeAfterHeal(set, get, obj.id, obj.home ?? 'jardin')
+              if (inHosp) toast(`✅ ${obj.name} tiene el alta. Dile «${obj.name} al patio» para recogerlo.`)
             }
           }
         } else {
@@ -2137,6 +2102,7 @@ export const useStudio = create<StudioState>((set, get) => {
 
         if (!rt.sick && (rt.stats.comida <= 0.5 || rt.stats.higiene <= 0.5)) {
           rt.sick = true
+          if (obj.level === 'hospital' && rt.hospitalStatus !== 'treating') {rt.hospitalStatus = 'waiting';rt.state = 'rest';rt.healAt = Infinity;rt.restUntil = Infinity}
           get().spawnParticles('🤒', obj.x, obj.y - 5, 2)
           toast(`🤒 ¡${obj.name} se puso enfermo/a! Tócalo/a y usa 🏥 Curar`, { duration: 5000 })
           sfx.sad()
@@ -2146,9 +2112,13 @@ export const useStudio = create<StudioState>((set, get) => {
         // ===== VOCES: cada mascota suena con su voz según su ánimo =====
         if (now >= rt.voiceAt && rt.state !== 'sleep') {
           speak(set, get, obj, moodOf(rt))
+          if (!rt.inside && !rt.injured && !rt.sick && (rt.pairCd.helloCount ?? 0) % 3 === 0) {
+            set({say:{...get().say,[obj.id]:{text:`¡Hola! Soy ${obj.name} 👋`,until:now+3500}}})
+          }
+          rt.pairCd = {...rt.pairCd, helloCount:(rt.pairCd.helloCount ?? 0)+1}
           // cuantas más mascotas haya, más espaciadas las voces (sin cacofonía)
           const spacing = Math.min(3, Math.max(1, activePets.length / 2))
-          rt.voiceAt = now + rand(9000, 17000) * spacing
+          rt.voiceAt = now + rand(7000, 13000) * spacing
         }
 
         pets[obj.id] = rt

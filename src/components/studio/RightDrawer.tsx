@@ -7,8 +7,9 @@
 // Dentro va todo lo "de segundo nivel" en un SUBMENU APILABLE (acordeón).
 
 import { useEffect, useState } from 'react'
+import { petPersonality } from '@/lib/studio/personality'
 import { useStudio } from '@/lib/studio/store'
-import { STATS, STAT_KEYS, catalogById } from '@/lib/studio/catalog'
+import { STATS, STAT_KEYS, LEVELS, catalogById } from '@/lib/studio/catalog'
 import { Command, PlayerAction } from '@/lib/studio/types'
 import { LibraryPanel } from '@/components/studio/LibraryPanel'
 import { PropertiesPanel } from '@/components/studio/PropertiesPanel'
@@ -31,6 +32,7 @@ const ORDERS: { id: Command; emoji: string; label: string }[] = [
 ]
 
 export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
+  const careMissions = useStudio(s=>s.careMissions)
   const [open, setOpen] = useState(false)
   const [sec, setSec] = useState<string | null>(mode === 'edit' ? 'objetos' : 'estado')
 
@@ -75,6 +77,33 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
 
   // ===== secciones según modo =====
   const playSections = [
+    {id:'misiones',emoji:'🎯',title:'Misiones para ganar monedas',body:<div className="space-y-2 text-xs font-bold text-slate-600">
+      <p>Cuida a cualquier mascota. Cada tres cuidados del mismo tipo ganas 5 monedas extra.</p>
+      <p>🍖 Alimentar: {careMissions.alimentar}/3 · +3 🪙 por cuidado</p>
+      <p>🤗 Acariciar: {careMissions.acariciar}/3 · +2 🪙 por cuidado</p>
+      <p>🫧 Bañar: {careMissions.banar}/3 · +3 🪙 por cuidado</p>
+      <p>🩺 Tratamiento: 15 🪙. Puedes cuidar a pacientes que esperan tratamiento.</p>
+    </div>},
+    {
+      id: 'mapa', emoji: '🗺️', title: 'Dónde están mis mascotas',
+      body: <div className="space-y-3">{LEVELS.map(level => {
+        const residents = objects.filter(o => o.level === level.id && catalogById[o.catalogId]?.kind === 'pet')
+        return <div key={level.id} className="rounded-xl border border-sky-100 bg-sky-50/50 p-2">
+          <p className="mb-1 text-xs font-black">{level.emoji} {level.name} · {residents.length}</p>
+          {residents.length === 0 && <p className="text-[11px] text-slate-500">Sin mascotas</p>}
+          {residents.map(p => <button key={p.id} type="button" onClick={() => {
+            useStudio.getState().setLevel(p.level); useStudio.getState().select(p.id)
+            if (petsMap[p.id]?.inside) useStudio.getState().openHouse(petsMap[p.id].inside!)
+            setOpen(false)
+          }} className="mb-1 flex w-full items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-left text-[11px] font-bold">
+            {catalogById[p.catalogId]?.emoji} {p.name}
+            <span className="ml-auto text-[10px] text-slate-500">{petsMap[p.id]?.hospitalStatus === 'waiting' ? '🩺 15 🪙'
+              : petsMap[p.id]?.hospitalStatus === 'treating' ? '🩺 en tratamiento' : petsMap[p.id]?.hospitalStatus === 'ready' ? '✅ alta'
+              : petsMap[p.id]?.inside ? '🏠 casita' : '📍 localizar'}</span>
+          </button>)}
+        </div>
+      })}</div>,
+    },
     {
       id: 'estado',
       emoji: '🐾',
@@ -105,6 +134,8 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
               )
             })}
           </div>
+          <p className="text-[11px] font-bold text-slate-500">{petPersonality(sel).label}</p>
+          <p className="text-[11px] text-slate-500">💛 Amigos: {objects.filter(o=>(rt.bonds[o.id] ?? 0)>=12).map(o=>o.name).join(', ') || 'aún conociéndose'}</p>
           <div className="flex items-center gap-2">
             <span className="shrink-0 text-[10px] font-black text-violet-600">⭐ Nv. {rt.lvl}</span>
             <div className="h-2 flex-1 overflow-hidden rounded-full border border-violet-100 bg-violet-100">
@@ -124,6 +155,11 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
       title: 'Cuidado',
       body: (
         <div className="grid grid-cols-3 gap-2">
+          {rt?.hospitalStatus && <div className="col-span-3 rounded-xl bg-teal-50 p-2 text-xs font-bold text-teal-800">
+            {rt.hospitalStatus === 'waiting' ? '🩺 Espera tratamiento: 15 🪙. Gana monedas dando comida (+3), caricias (+2) o un baño (+3).'
+              : rt.hospitalStatus === 'treating' ? '🩺 Tratamiento en marcha… 25 segundos' : '✅ Tiene el alta. Dile que vaya al patio, casa o playa.'}
+          </div>}
+          {rt?.hospitalStatus === 'waiting' && <button type="button" onClick={() => playerAction('curar')} className="col-span-3 rounded-xl border-2 border-teal-300 bg-teal-50 p-2 text-xs font-black text-teal-800">🩺 Iniciar tratamiento · 15 🪙</button>}
           {[...CARE_ACTIONS.map((a) => (a.id === 'dormir' && rt ? sleepAction : a))].map((a) => (
             <button
               key={a.id}
@@ -139,7 +175,7 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
               <span className="text-[10px] text-slate-500">{a.label}</span>
             </button>
           ))}
-          {rt?.sick && (
+          {rt?.sick && !rt.hospitalStatus && (
             <button
               type="button"
               onClick={() => playerAction('curar')}
@@ -209,6 +245,7 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
             <p>«{sel?.name ?? 'Max'} a la playa» · «al patio» · «al hospital»</p>
             <p>«a comer» · «a la cama» · «toma agua» · «báñate»</p>
             <p>«corre» · «pasea» · «salta» · «baila»</p>
+            <p>«hola» · «sígueme» · «a la casita» · «fuera» · «tratamiento»</p>
             <p>«descansa» · «despierta» · «libre»</p>
             <p>Usa el nombre para ordenar a una; sin nombre, a las de este mundo.</p>
           </div>

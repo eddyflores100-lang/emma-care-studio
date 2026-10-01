@@ -505,17 +505,127 @@ body {
   left: 10px;
   bottom: calc(10px + env(safe-area-inset-bottom, 0px));
   z-index: 46;
-  max-width: min(58vw, 330px);
+  max-width: min(62vw, 360px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   border-radius: 9999px;
   background: rgba(15, 23, 42, 0.78);
   color: #fff;
   font-size: 11px;
   font-weight: 800;
-  padding: 6px 12px;
+  padding: 5px 10px 5px 6px;
   backdrop-filter: blur(4px);
+}
+.emma-voice-heard {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+/* chip de la ORDEN reconocida: cada orden tiene SU color (se distinguen) */
+.emma-order-chip {
+  flex-shrink: 0;
+  border-radius: 9999px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+.emma-order-chip[data-kind='listen'] {
+  background: rgba(255, 255, 255, 0.14);
+}
+.emma-order-chip[data-kind='calm'] {
+  background: #f43f5e;
+} /* quietos: rojo = ALTO */
+.emma-order-chip[data-kind='out'] {
+  background: #0ea5e9;
+} /* salgan: cielo */
+.emma-order-chip[data-kind='hide'] {
+  background: #8b5cf6;
+} /* escondeos: violeta */
+.emma-order-chip[data-kind='goto'] {
+  background: #f59e0b;
+  color: #422006;
+} /* a la casa/cama…: ámbar */
+.emma-order-chip[data-kind='hospital'] {
+  background: #10b981;
+} /* hospital: verde */
+.emma-order-chip[data-kind='ball'] {
+  background: #84cc16;
+  color: #1a2e05;
+} /* pelota: lima */
+.emma-order-chip[data-kind='sit'] {
+  background: #a855f7;
+} /* sentado: morado */
+.emma-order-chip[data-kind='come'],
+.emma-order-chip[data-kind='call'] {
+  background: #06b6d4;
+} /* ven / nombre: turquesa */
+.emma-order-chip[data-kind='unknown'] {
+  background: #64748b;
+} /* no entendí: gris */
+
+/* ===== 🏠 LA CASITA ES DE VERDAD: badge de ocupantes + panel ===== */
+.emma-house-badge {
+  pointer-events: auto;
+  position: absolute;
+  top: -10px;
+  right: -14px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 9999px;
+  border: 2px solid #fff;
+  background: rgba(251, 191, 36, 0.95);
+  color: #422006;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 3px 7px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+  animation: emma-badge-bob 1.6s ease-in-out infinite;
+  cursor: pointer;
+  z-index: 35;
+}
+@keyframes emma-badge-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+.emma-house-panel {
+  position: absolute;
+  left: 50%;
+  top: 54px;
+  transform: translateX(-50%);
+  z-index: 80;
+  width: min(78vw, 270px);
+  border-radius: 1.25rem;
+  border: 3px solid #fde68a;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  animation: pop-in 0.22s ease-out;
+}
+.emma-house-list {
+  max-height: 108px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 2px;
 }
 
 /* ===== AVISO "gira el móvil" (solo vertical en teléfono) ===== */

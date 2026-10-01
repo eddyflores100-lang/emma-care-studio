@@ -16,6 +16,7 @@ import { useStudio } from '@/lib/studio/store'
 import { catalogById, levelById } from '@/lib/studio/catalog'
 import { PetRuntime, WorldObject } from '@/lib/studio/types'
 import { sfx } from '@/lib/studio/sound'
+import { HousePanel } from '@/components/studio/HousePanel'
 import { cn } from '@/lib/utils'
 
 const clampPct = (v: number) => Math.max(3, Math.min(97, v))
@@ -84,6 +85,7 @@ export function WorldCanvas() {
   const throwBallAt = useStudio((s) => s.throwBallAt)
   const claimGift = useStudio((s) => s.claimGift)
   const calmAll = useStudio((s) => s.calmAll)
+  const openHouse = useStudio((s) => s.openHouse)
 
   const levelDef = levelById[currentLevel]
   const now = Date.now()
@@ -94,6 +96,18 @@ export function WorldCanvas() {
     mode === 'play' && Object.values(pets).some((rt) => rt.chaseUntil > now)
   // solo se ven los objetos del mundo activo
   const visible = objects.filter((o) => o.level === currentLevel)
+  // quiénes están DENTRO de cada casita (para el badge y el toque en la casa)
+  const insideByHouse = new Map<string, { id: string; emoji: string }[]>()
+  if (mode === 'play') {
+    for (const [pid, prt] of Object.entries(pets)) {
+      if (!prt.inside) continue
+      const obj = objects.find((o) => o.id === pid)
+      if (!obj || obj.level !== currentLevel) continue
+      const arr = insideByHouse.get(prt.inside) ?? []
+      arr.push({ id: pid, emoji: catalogById[obj.catalogId]?.emoji ?? '🐾' })
+      insideByHouse.set(prt.inside, arr)
+    }
+  }
 
   function pointFromClient(clientX: number, clientY: number) {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -113,6 +127,7 @@ export function WorldCanvas() {
   }
 
   function pointerDown(e: React.PointerEvent, obj: WorldObject) {
+    const itemKind = catalogById[obj.catalogId]?.kind
     if (mode === 'edit') {
       e.stopPropagation()
       selectForEdit(obj.id)
@@ -128,8 +143,8 @@ export function WorldCanvas() {
       } catch {
         // algunos navegadores antiguos no soportan captura: no pasa nada
       }
-    } else if (mode === 'play') {
-      // empezar el gesto de caricia (frotar)
+    } else if (mode === 'play' && itemKind === 'pet') {
+      // empezar el gesto de caricia (frotar) — solo mascotas
       e.stopPropagation()
       strokeRef.current = { id: obj.id, dist: 0, lastX: e.clientX, lastY: e.clientY }
       try {
@@ -177,6 +192,9 @@ export function WorldCanvas() {
       if (item?.kind === 'pet') {
         select(obj.id)
         sfx.click()
+      } else if (insideByHouse.get(obj.id)?.length) {
+        // 🏠 tocar una casita con gente dentro = «¿quién está dentro?»
+        openHouse(obj.id)
       }
     }
   }
@@ -190,6 +208,7 @@ export function WorldCanvas() {
     if (mode === 'play') {
       // tocar el mundo durante una persecución = aplauso calmante
       const p = pointFromClient(e.clientX, e.clientY)
+      useStudio.getState().setOwnerPoint(p.x, p.y)
       if (calmAll(p.x, p.y)) return
     }
     select(null)
@@ -270,6 +289,9 @@ export function WorldCanvas() {
         if (!item) return null
         const isPet = item.kind === 'pet'
         const rt = mode === 'play' ? pets[obj.id] : undefined
+        // está DENTRO de la casita: no se ve (sale cuando la llamen)
+        if (rt?.inside) return null
+        const occupants = isPet ? undefined : insideByHouse.get(obj.id)
         const selected = selectedId === obj.id
         const bubble = rt ? petBubble(rt) : null
         const face = rt ? petFace(rt, now) : null
@@ -289,7 +311,9 @@ export function WorldCanvas() {
                 ? 'cursor-grab active:cursor-grabbing'
                 : isPet
                   ? 'cursor-pointer'
-                  : 'pointer-events-none',
+                  : occupants?.length
+                    ? 'cursor-pointer'
+                    : 'pointer-events-none',
             )}
             style={{
               left: `${obj.x}%`,
@@ -392,6 +416,22 @@ export function WorldCanvas() {
                 ✨
               </span>
             )}
+            {/* 🏠 casita con ocupantes: badge con quiénes están dentro (táctil) */}
+            {mode === 'play' && occupants?.length ? (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openHouse(obj.id)
+                }}
+                className="emma-house-badge"
+                title={`Dentro: ${occupants.length}. Toca para ver y sacar`}
+                aria-label={`${occupants.length} mascotas dentro de ${obj.name}`}
+              >
+                <span aria-hidden>{occupants.map((o) => o.emoji).join('')}</span>
+                <span aria-hidden>💤</span>
+              </button>
+            ) : null}
             {/* globo de petición de cuidado */}
             {bubble && !voiceText && (
               <span className="absolute -top-7 left-1/2 -translate-x-1/2 animate-bounce rounded-full bg-white px-2 py-0.5 text-sm font-black shadow-md">
@@ -509,6 +549,9 @@ export function WorldCanvas() {
           </span>
         </div>
       )}
+
+      {/* 🏠 panel «¿quién está dentro de la casa?» (se abre al tocar la casita) */}
+      {mode === 'play' && <HousePanel />}
 
       {/* pista del modo pelota */}
       {mode === 'play' && ballPending && (

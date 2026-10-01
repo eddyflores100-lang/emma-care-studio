@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
 export function VoiceControls() {
+  const lastVoice = useStudio(s => s.lastVoice)
   const [text, setText] = useState('')
   const { supported, listening, error, heard, toggle } = useVoice()
 
@@ -73,14 +74,15 @@ export function VoiceControls() {
             <Input value={text} onChange={e => setText(e.target.value)} maxLength={150} aria-label="Orden para las mascotas" placeholder="Max ven" autoFocus />
             <Button type="submit" disabled={!text.trim()}>Enviar</Button>
           </form>
-          <p className="text-xs leading-relaxed text-slate-600">Ven · Quieto · Sentado · Libre · Escondeos · Corre · Pasea · Salta · Baila · Descansa · Despierta · A comer · A la cama · Toma agua · Báñate</p>
-          <p className="text-xs text-slate-600">Viajes: a la casa · al patio · a la playa · al hospital. Primero desbloquea el mundo.</p>
+          <p className="text-xs leading-relaxed text-slate-600">Hola · Sígueme · Fuera · Tratamiento · Ven · Quieto · Sentado · Libre · Escondeos · Corre · Pasea · Salta · Baila · Descansa · Despierta · A comer · A la cama · Toma agua · Báñate</p>
+          <p className="text-xs text-slate-600">Viajes: a la casa · al patio · a la playa · al hospital. Primero desbloquea el mundo. «A la casita» entra al refugio local; «fuera» lo libera.</p>
         </DialogContent>
       </Dialog>
       {/* lo que oye, en una pastillita discreta abajo (sin estorbar) */}
       {listening && (
         <div className="emma-voice-cap" role="status" aria-live="polite">
-          🎙️ {heard || 'escuchando… ¡Quietos! · ¡Escondeos! · ¡Ven! · ¡Max a la casa!'}
+          <span className="emma-order-chip" data-kind={lastVoice?.kind ?? 'listen'}>{lastVoice?.label ?? '🎙️ escuchando…'}</span>
+          <span className="emma-voice-heard">«{heard || 'Max ven · gato hola · Max a la casa'}»</span>
         </div>
       )}
     </>

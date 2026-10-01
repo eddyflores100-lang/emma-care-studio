@@ -16,6 +16,7 @@
 // (dentro del gesto de tocar ▶ ¡JUGAR!) y sobrevivir a los renders.
 
 import { useSyncExternalStore } from 'react'
+import { catalogById } from './catalog'
 import type { WorldObject } from './types'
 
 /** quita mayúsculas, acentos y signos: "¡Quietos!" → "quietos" */
@@ -48,18 +49,22 @@ function lev(a: string, b: string): number {
 
 // Vocabulary is shared by the parser and the command help panel.
 const WORDS = {
-  calm: ['quieto', 'quietos', 'quieta', 'quietas', 'para', 'paren', 'alto', 'basta', 'calmense', 'no peleen', 'separense', 'stop'],
+  calm: ['quieto', 'quietos', 'quieta', 'quietas', 'para', 'paren', 'alto', 'basta', 'calmense', 'no peleen', 'no pelees', 'no pelear', 'separense', 'stop'],
   hide: ['escondeos', 'escondanse', 'esconde', 'esconderse', 'escondite', 'refugio', 'ocultense'],
   sit: ['sentado', 'sentados', 'sentate', 'sientate', 'sientense', 'sienta'],
-  come: ['ven', 'ven aqui', 'ven aca', 'aqui', 'aca', 'vengan', 'sigueme', 'vengan aqui'],
+  come: ['ven', 'ven aqui', 'ven aca', 'aqui', 'aca', 'vengan', 'vengan aqui'],
   ball: ['pelota', 'bola', 'lanza la pelota', 'tira la pelota'],
   run: ['corre', 'corran', 'correr', 'a correr'],
   walk: ['pasea', 'paseen', 'camina', 'caminen', 'paseo'],
-  free: ['libre', 'libres', 'suelto', 'sueltos', 'puedes moverte', 'a jugar'],
+  free: ['libre', 'libres', 'suelto', 'sueltos', 'deja eso', 'suelta eso', 'puedes moverte', 'a jugar'],
   rest: ['descansa', 'descansen', 'reposo'],
   wake: ['despierta', 'despierten', 'levantate'],
   jump: ['salta', 'salten', 'saltar'],
   dance: ['baila', 'bailen', 'bailar'],
+  follow: ['sigueme', 'siganme', 'acompaname'],
+  out: ['salgan', 'sal', 'salid', 'fuera', 'salgan de la casita'],
+  greet: ['hola', 'saluda', 'saluden', 'buenos dias', 'buenas tardes', 'buenas noches'],
+  treat: ['tratamiento', 'tratar', 'cura', 'curate'],
 } as const
 export type VoiceKind = keyof typeof WORDS | 'call' | 'goto' | 'travel'
 export type VoiceDest = 'cama' | 'agua' | 'comida' | 'bano' | 'casita'
@@ -107,6 +112,12 @@ function findPetsByName(text: string, pets: WorldObject[]) {
     }
   }
   if (exact.length) return exact
+  const species = pets.filter(p => {
+    const label = catalogById[p.catalogId]?.name
+    return label && wordHit(text, [norm(label), ...(p.catalogId === 'bird' ? ['pajaro', 'ave'] : [])])
+  })
+  if (species.length === 1) return species
+  if (species.length > 1) return []
   const reserved = [...Object.values(WORDS).flat(), ...DESTS.flatMap(d => d.words), ...WORLDS.flatMap(d => d.words)]
   const tokens = text.split(' ').filter(t => t.length >= 3 && !reserved.includes(t))
   const candidates = pets.filter(p => {
@@ -120,10 +131,16 @@ export function parseVoiceCommand(raw: string, pets: WorldObject[]): ParsedVoice
   const t = norm(raw)
   if (!t) return null
   const named = findPetsByName(t, pets)
+  if (named.some(p => pets.filter(other => norm(other.name) === norm(p.name)).length > 1)) return null
   // Remove recognized names before parsing: a pet named Bola or Sol still
   // answers its name, and command-like names don't become destinations.
   let words = ` ${t} `
-  for (const p of named) words = words.replace(` ${norm(p.name)} `, ' ')
+  for (const p of named) {
+    words = words.replace(` ${norm(p.name)} `, ' ')
+    const label = catalogById[p.catalogId]?.name
+    if (label) words = words.replace(` ${norm(label)} `, ' ')
+    if (p.catalogId === 'bird') words = words.replace(/ (pajaro|ave) /g, ' ')
+  }
   const commandText = words.trim()
   if (!named.length) {
     const known = [...Object.values(WORDS).flat(), ...DESTS.flatMap(d => d.words), ...WORLDS.flatMap(d => d.words),
@@ -133,11 +150,12 @@ export function parseVoiceCommand(raw: string, pets: WorldObject[]): ParsedVoice
   }
   const base = { named, matchedName: named.length ? named.map(p => p.name).join(', ') : null }
   const kind = (Object.keys(WORDS) as (keyof typeof WORDS)[]).find(k => wordHit(commandText, WORDS[k]))
-  if (kind) return { ...base, kind }
+  if (kind && ['calm','out','hide','treat'].includes(kind)) return { ...base, kind }
   const world = WORLDS.find(d => wordHit(commandText, d.words))
   if (world) return { ...base, kind: 'travel', level: world.level }
   const dest = DESTS.find(d => wordHit(commandText, d.words))
   if (dest) return { ...base, kind: 'goto', dest: dest.dest }
+  if (kind) return { ...base, kind }
   if (named.length) return { ...base, kind: 'call' }
   return null
 }

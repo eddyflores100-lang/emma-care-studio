@@ -85,7 +85,7 @@ export interface Rule {
 export type PetState = 'idle' | 'walk' | 'eat' | 'sleep' | 'drink' | 'rest'
 
 /** órdenes de obediencia que el dueño puede dar */
-export type Command = 'sit' | 'stay' | 'come' | 'hide' | 'run' | 'walk' | 'jump' | 'dance'
+export type Command = 'sit' | 'stay' | 'come' | 'follow' | 'hide' | 'run' | 'walk' | 'jump' | 'dance'
 
 /** sorpresas aleatorias del juego */
 export type EventKind = 'lluvia' | 'escasez' | 'mariposa' | 'regalo'
@@ -101,6 +101,7 @@ export interface GameEvent {
 
 /** pelota lanzable por el dueño (el perro y el zorro la buscan) */
 export interface Ball {
+  targetId?: string | null
   id: string
   x: number
   y: number
@@ -153,7 +154,11 @@ export interface PetRuntime {
   // ===== órdenes del dueño (sentado, quieto, ven) =====
   obey: { cmd: Command; until: number } | null
   /** orden por voz con destino: "¡Max a la casa!" — camina hasta el lugar indicado */
-  goTo: { dest: 'casa' | 'casita' | 'cama' | 'agua' | 'comida' | 'bano'; until: number } | null
+  inside: string | null
+  hospitalStatus: 'waiting' | 'treating' | 'ready' | null
+  roamStep: number
+  bonds: Record<string,number>
+  goTo: { spotId?: string | null; dest: 'casa' | 'casita' | 'cama' | 'agua' | 'comida' | 'bano'; until: number } | null
 }
 
 export interface Particle {
@@ -179,6 +184,7 @@ export interface SavedProject {
   unlockedLevels?: LevelId[]
   currentLevel?: LevelId
   pets?: Record<string, SavedPet>
+  careMissions?: Record<'alimentar' | 'acariciar' | 'banar',number>
 }
 
 /** Durable progress; transient fights/targets are never resumed after importing. */
@@ -192,6 +198,9 @@ export interface SavedPet {
   healRemaining: number
   restRemaining: number
   stay: boolean
+  bonds?: Record<string,number>
+  inside?: string | null
+  hospitalStatus?: 'waiting' | 'treating' | 'ready' | null
   hold?: { cmd: 'stay' | 'sit'; remaining: number | null } | null
 }
 

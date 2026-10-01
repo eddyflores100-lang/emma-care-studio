@@ -13,6 +13,9 @@ const stats = z.object({ felicidad: number(0, 100), comida: number(0, 100),
 const savedPet = z.object({ stats, lvl: number(1, 9).int(), xp: number(0, 99).int(),
   injured: z.boolean(), sick: z.boolean(), state: z.enum(['idle', 'sleep', 'rest']),
   healRemaining: number(0, 120000), restRemaining: number(0, 120000), stay: z.boolean(),
+  bonds: z.record(id,number(-100,100)).optional(),
+  inside: id.nullable().optional(),
+  hospitalStatus: z.enum(['waiting','treating','ready']).nullable().optional(),
   hold: z.object({cmd:z.enum(['stay','sit']),remaining:number(0,120000).nullable()}).nullable().optional() })
 const schema = z.object({
   version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
@@ -30,6 +33,7 @@ const schema = z.object({
   coins: number(0, 1_000_000_000).default(0), savedAt: z.string().max(100).default(''),
   unlockedLevels: z.array(level).max(4).default(['jardin']), currentLevel: level.default('jardin'),
   pets: z.record(id, savedPet).optional(),
+  careMissions: z.object({alimentar:number(0,2).int(),acariciar:number(0,2).int(),banar:number(0,2).int()}).optional(),
 })
 
 export function decodeProject(raw: string): SavedProject {
@@ -41,18 +45,25 @@ export function decodeProject(raw: string): SavedProject {
   if (data.objects.some(o => !data.unlockedLevels.includes(o.level))) throw new Error('Mundo bloqueado')
   const petIds = new Set(data.objects.filter(o => catalogById[o.catalogId].kind === 'pet').map(o => o.id))
   data.pets = Object.fromEntries(Object.entries(data.pets ?? {}).filter(([pid]) => petIds.has(pid)))
+  for (const obj of data.objects) {
+    const rt = data.pets[obj.id]
+    if (rt?.bonds) rt.bonds = Object.fromEntries(Object.entries(rt.bonds).filter(([pid])=>petIds.has(pid)&&pid!==obj.id))
+    if (rt?.inside && !data.objects.some(o => o.id === rt.inside && o.catalogId === 'house' && o.level === obj.level)) rt.inside = null
+    if (rt?.hospitalStatus && obj.level !== 'hospital') rt.hospitalStatus = null
+  }
   return data
 }
 
 export function snapshotProject(s: { objects: WorldObject[]; rules: SavedProject['rules']; coins: number;
   unlockedLevels: NonNullable<SavedProject['unlockedLevels']>; currentLevel: NonNullable<SavedProject['currentLevel']>;
-  pets: Record<string, PetRuntime> }): SavedProject {
+  pets: Record<string, PetRuntime>; careMissions?: SavedProject['careMissions'] }): SavedProject {
   const now = Date.now()
-  return { version: 3, objects: s.objects, rules: s.rules, coins: s.coins,
+  return { version: 3, careMissions:s.careMissions, objects: s.objects, rules: s.rules, coins: s.coins,
     unlockedLevels: s.unlockedLevels, currentLevel: s.currentLevel, savedAt: new Date().toISOString(),
     pets: Object.fromEntries(s.objects.filter(o => catalogById[o.catalogId]?.kind === 'pet' && s.pets[o.id])
       .map(o => { const rt = s.pets[o.id]; return [o.id, {
         stats: { ...rt.stats }, lvl: rt.lvl, xp: rt.xp, injured: rt.injured, sick: rt.sick,
+        bonds:{...rt.bonds}, inside: rt.inside, hospitalStatus: rt.hospitalStatus,
         state: rt.state === 'sleep' || rt.state === 'rest' ? rt.state : 'idle',
         healRemaining: Math.max(0, Math.min(120000, rt.healAt - now)),
         restRemaining: Math.max(0, Math.min(120000, rt.restUntil - now)),
