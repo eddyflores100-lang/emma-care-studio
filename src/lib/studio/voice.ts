@@ -63,7 +63,7 @@ const WORDS = {
   dance: ['baila', 'bailen', 'bailar'],
   follow: ['sigueme', 'siganme', 'acompaname'],
   out: ['salgan', 'sal', 'salid', 'fuera', 'salgan de la casita'],
-  greet: ['hola', 'saluda', 'saluden', 'buenos dias', 'buenas tardes', 'buenas noches'],
+  greet: ['hola', 'saluda', 'saluden', 'buenos dias', 'buenas tardes', 'buenas noches', 'ladra', 'maulla', 'canta', 'saludame'],
   treat: ['tratamiento', 'tratar', 'cura', 'curate'],
 } as const
 export type VoiceKind = keyof typeof WORDS | 'call' | 'goto' | 'travel'
@@ -122,7 +122,7 @@ function findPetsByName(text: string, pets: WorldObject[]) {
   const tokens = text.split(' ').filter(t => t.length >= 3 && !reserved.includes(t))
   const candidates = pets.filter(p => {
     const n = norm(p.name)
-    return n.length >= 3 && tokens.some(t => lev(t, n) <= 1 && Math.abs(t.length - n.length) <= 1)
+    return n.length >= 3 && tokens.some(t => lev(t.replace(/ks$/, 'x'), n) <= 1 && Math.abs(t.length - n.length) <= 1)
   })
   // Ambiguous fuzzy matches must not direct several pets accidentally.
   return candidates.length === 1 ? candidates : []
@@ -140,18 +140,32 @@ export function parseVoiceCommand(raw: string, pets: WorldObject[]): ParsedVoice
     const label = catalogById[p.catalogId]?.name
     if (label) words = words.replace(` ${norm(label)} `, ' ')
     if (p.catalogId === 'bird') words = words.replace(/ (pajaro|ave) /g, ' ')
+    // Remove the actual misheard name as well, never command vocabulary.
+    const reserved = [...Object.values(WORDS).flat(), ...DESTS.flatMap(d => d.words), ...WORLDS.flatMap(d => d.words)].flatMap(w => w.split(' '))
+    words = words.split(' ').map(token => !reserved.includes(token) && norm(p.name).length >= 3 && lev(token.replace(/ks$/, 'x'), norm(p.name)) <= 1 ? '' : token).join(' ')
   }
-  const commandText = words.trim()
-  if (!named.length) {
+  const commandText = words.replace(/\s+/g, ' ').trim()
+  {
     const known = [...Object.values(WORDS).flat(), ...DESTS.flatMap(d => d.words), ...WORLDS.flatMap(d => d.words),
-      'todos', 'todas', 'mascotas', 'por', 'favor', 'a', 'al', 'ala', 'la', 'el', 'las', 'los', 'mi', 'tu', 'su', 'se', 'no', 'de', 'mis']
+      'todos', 'todas', 'mascotas', 'por', 'favor', 'a', 'al', 'ala', 'la', 'el', 'las', 'los', 'mi', 'tu', 'su', 'se', 'no', 'de', 'mis', 've', 'vete', 'ir', 'anda', 'vamos', 'y', 'trae', 'traeme', 'lleva']
       .flatMap(w => w.split(' '))
-    if (commandText.split(' ').some(token => !known.includes(token))) return null
+    if (commandText.split(' ').filter(Boolean).some(token => !known.includes(token))) return null
   }
+  if (wordHit(commandText, ['no']) && !wordHit(commandText, ['no peleen', 'no pelees', 'no pelear'])) return null
+  const kinds = (Object.keys(WORDS) as (keyof typeof WORDS)[]).filter(k => wordHit(commandText, WORDS[k]))
+  if (kinds.length > 1) return null
   const base = { named, matchedName: named.length ? named.map(p => p.name).join(', ') : null }
   const kind = (Object.keys(WORDS) as (keyof typeof WORDS)[]).find(k => wordHit(commandText, WORDS[k]))
+  const worlds = WORLDS.filter(d => wordHit(commandText, d.words))
+  const destinations = DESTS.filter(d => wordHit(commandText, d.words))
+  if (worlds.length > 1 || destinations.length > 1) return null
+  if (kind && (worlds.length || destinations.length) && wordHit(commandText, ['y'])) return null
+  if (worlds.length && destinations.length) {
+    if (wordHit(commandText, ['refugiarse en casa']) && !wordHit(commandText, ['y'])) return { ...base, kind: 'goto', dest: 'casita' }
+    return null
+  }
   if (kind && ['calm','out','hide','treat'].includes(kind)) return { ...base, kind }
-  const world = WORLDS.find(d => wordHit(commandText, d.words))
+  const world = worlds[0]
   if (world) return { ...base, kind: 'travel', level: world.level }
   const dest = DESTS.find(d => wordHit(commandText, d.words))
   if (dest) return { ...base, kind: 'goto', dest: dest.dest }
@@ -234,8 +248,9 @@ function build(): Recog | null {
   r.interimResults = true
   r.maxAlternatives = 3
 
+  const handled = new Set<number>()
   r.onresult = (e) => {
-    if (!want) return
+    if (!want || recog !== r) return
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i]
       const txt = res?.[0]?.transcript ?? ''
@@ -244,7 +259,8 @@ function build(): Recog | null {
       emit()
       // Interim transcripts only update the caption. Execute one complete
       // phrase, and only try alternatives if the previous one was unknown.
-      if (!res.isFinal || !handler) continue
+      if (!res.isFinal || !handler || handled.has(i)) continue
+      handled.add(i)
       for (let a = 0; a < res.length; a++) {
         const alt = res[a]?.transcript
         if (alt?.trim() && handler(alt) !== 'unknown') break
@@ -252,6 +268,7 @@ function build(): Recog | null {
     }
   }
   r.onerror = (e) => {
+    if (!want || recog !== r) return
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       want = false
       st.listening = false
@@ -267,14 +284,16 @@ function build(): Recog | null {
     // 'no-speech' / 'aborted' son normales: onend rearranca solo
   }
   r.onend = () => {
+    if (recog !== r) return
     st.listening = false
     emit()
     if (want) {
       // pequeño respiro para no saturar al navegador al rearrancar
       if (restartTimer) window.clearTimeout(restartTimer)
       restartTimer = window.setTimeout(() => {
-        if (!want) return
+        if (!want || recog !== r) return
         try {
+          handled.clear()
           r.start()
           st.listening = true
           emit()
@@ -324,9 +343,9 @@ export const voiceEngine = {
     want = true
     st.error = null
     st.heard = ''
-    if (!recog) recog = build()
-    if (!recog) return
     if (st.listening) return
+    recog = build()
+    if (!recog) return
     try {
       recog.start()
     } catch {
@@ -363,4 +382,21 @@ export const voiceEngine = {
 export function useVoice(): VoiceState & { toggle: () => void } {
   const snap = useSyncExternalStore(voiceEngine.subscribe, voiceEngine.getSnapshot, voiceEngine.getSnapshot)
   return { ...snap, toggle: voiceEngine.toggle }
+}
+
+
+/** Pause the microphone offscreen and start a fresh mobile session on return. */
+export function attachVoiceLifecycle(doc: Pick<Document, 'visibilityState' | 'addEventListener' | 'removeEventListener'> = document) {
+  let resume = false
+  const onVisibility = () => {
+    if (doc.visibilityState !== 'visible') {
+      resume = want
+      voiceEngine.stop()
+    } else if (resume) {
+      resume = false
+      voiceEngine.start()
+    }
+  }
+  doc.addEventListener('visibilitychange', onVisibility)
+  return () => { doc.removeEventListener('visibilitychange', onVisibility); resume = false }
 }

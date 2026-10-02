@@ -10,8 +10,9 @@
 import { useEffect } from 'react'
 import { useStudio } from '@/lib/studio/store'
 import { createAutosave } from '@/lib/studio/autosave'
-import { keepScreenAwake } from '@/lib/studio/screen'
-import { voiceEngine } from '@/lib/studio/voice'
+import { keepScreenAwake, maintainLandscape, enterLandscape } from '@/lib/studio/screen'
+import { voiceEngine, attachVoiceLifecycle } from '@/lib/studio/voice'
+import { attachAudioRecovery, unlockAudio } from '@/lib/studio/sound'
 import { HeaderBar } from '@/components/studio/HeaderBar'
 import { LevelBar } from '@/components/studio/LevelBar'
 import { IntroSplash } from '@/components/studio/IntroSplash'
@@ -26,7 +27,9 @@ export default function Home() {
   const mode = useStudio((s) => s.mode)
 
   useEffect(() => {
-    if (mode === 'play') return keepScreenAwake()
+    if (mode !== 'play') return
+    const cleanups = [keepScreenAwake(), maintainLandscape(), attachVoiceLifecycle(), attachAudioRecovery()]
+    return () => cleanups.forEach(cleanup => cleanup())
   }, [mode])
 
   // cargar proyecto guardado al abrir + conectar la VOZ con el motor
@@ -129,8 +132,11 @@ export default function Home() {
           <PlayHUD />
           <RightDrawer key="play" mode="play" />
           {/* en móvil vertical: mejor de lado */}
-          <div className="emma-rotate pointer-events-none fixed left-1/2 top-12 z-40 hidden max-[1024px]:portrait:block">
-            🔄 Gira el móvil: ¡se juega mejor en horizontal!
+          <div className="emma-rotate fixed left-1/2 top-12 z-40 hidden max-[1024px]:portrait:block">
+            <button type="button" className="rounded-xl bg-white px-3 py-2 font-bold text-rose-600 shadow" onClick={() => { void unlockAudio(); void enterLandscape() }}>
+              🔄 Volver a horizontal
+            </button>
+            <p className="mt-1 text-xs">Si no gira, gira el teléfono y desactiva el bloqueo de rotación.</p>
           </div>
         </div>
       )}

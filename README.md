@@ -149,3 +149,14 @@ PAGES_BASE_PATH=/emma-care-studio npm run build:export
 La integración continua exige pruebas, tipos, lint y exportación antes del despliegue. La prueba del reconocimiento usa eventos simulados; micrófono y suspensión deben comprobarse en un teléfono físico.
 
 Hecho con 💛 para que las niñas creen juegos, no solo los jueguen.
+
+
+## Recuperación móvil y respuestas sonoras (v0.10.1)
+
+- Al volver a la pestaña, se recupera el bloqueo horizontal si sigue en pantalla completa. Si el sistema salió de ella, toca **Volver a horizontal**. En navegadores sin bloqueo de orientación, gira el teléfono y desactiva el bloqueo de rotación del sistema.
+- La escucha se pausa fuera del juego y vuelve con una sesión nueva. Las frases finales repetidas no ejecutan dos veces una orden.
+- «Max», «Maks ven aquí», «gato maúlla» y «Misi trae la pelota» tienen respuestas de su especie y señales sonoras para saludar, moverse o quedarse quietos. Las llamadas alternan saludos.
+- El audio se reactiva al volver y al tocar la pantalla; las respuestas esperan a que el audio esté disponible. El botón de silencio sigue aplicándose.
+- Las frases con palabras desconocidas, órdenes contradictorias o movimientos negados se rechazan para evitar obediencias accidentales. Da una orden por frase y usa nombres distintos.
+
+Verificación automática: 61 pruebas del motor, TypeScript, ESLint y exportación estática. El reconocimiento depende del navegador, permiso de micrófono, conexión y ruido ambiental; conviene comprobarlo en el teléfono real.

@@ -4,6 +4,7 @@
 // (modo juego). También el botón grande ▶️ ¡JUGAR!, el micrófono de
 // pantalla completa ⛶ y el silenciador.
 
+import { enterLandscape } from '@/lib/studio/screen'
 import { useRef, useSyncExternalStore } from 'react'
 import { useStudio } from '@/lib/studio/store'
 import { Button } from '@/components/ui/button'
@@ -137,12 +138,7 @@ export function HeaderBar() {
   const toggleFullscreen = async () => {
     try {
       if (!document.fullscreenElement) {
-        await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
-        try {
-          await (screen.orientation as ScreenOrientation & { lock?: (orientation: string) => Promise<void> })?.lock?.('landscape')
-        } catch {
-          /* iOS/Safari sin lock: da igual, el juego funciona igual */
-        }
+        await enterLandscape()
       } else {
         try {
           screen.orientation?.unlock?.()

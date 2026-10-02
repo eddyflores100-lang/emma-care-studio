@@ -18,9 +18,9 @@ export function isMuted() {
   return muted
 }
 
-function ac(): AudioContext | null {
+function ac(resume = true): AudioContext | null {
   if (typeof window === 'undefined') return null
-  if (!ctx) {
+  if (!ctx || ctx.state === 'closed') {
     const AC =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
@@ -31,7 +31,7 @@ function ac(): AudioContext | null {
       return null
     }
   }
-  if (ctx.state === 'suspended') {
+  if (resume && ((ctx.state as string) === 'suspended' || (ctx.state as string) === 'interrupted')) {
     ctx.resume().catch(() => {})
   }
   return ctx
@@ -699,4 +699,51 @@ export const sfx = {
     tone(880, 0.09, 0.08, 'triangle', 0.08)
     tone(1174, 0.18, 0.16, 'triangle', 0.09)
   },
+}
+
+
+/** Run from a tap too: iOS may require a new gesture after backgrounding. */
+export async function unlockAudio(): Promise<boolean> {
+  const c = ac(false)
+  if (!c) return false
+  try {
+    if (c.state !== 'running') await c.resume()
+    return c.state === 'running'
+  } catch { return false }
+}
+
+let pendingReply: { play: () => void; expires: number } | null = null
+let replyVariant = 0
+/** Greetings alternate actual species calls; orders have an audible acknowledgement. */
+export async function petResponse(catalogId: string, kind: string) {
+  if (muted) return
+  const variant = replyVariant++ % 3
+  const play = () => {
+    if (muted) return
+    petVoice(catalogId, kind === 'call' || kind === 'greet' ? (variant === 1 ? 'feliz' : 'normal') : 'normal')
+    // A short melody distinguishes a greeting, movement, and staying still.
+    const notes = kind === 'call' || kind === 'greet' ? [660, 880, 990]
+      : kind === 'calm' || kind === 'sit' || kind === 'rest' ? [440, 330]
+      : kind === 'travel' || kind === 'come' || kind === 'follow' ? [440, 660, 880] : [660, 784]
+    notes.forEach((frequency, i) => tone(frequency, 1.1 + i * 0.12, 0.12, 'sine', 0.045))
+  }
+  if (await unlockAudio()) { play(); pendingReply = null }
+  else pendingReply = { play, expires: Date.now() + 5000 }
+}
+
+export function attachAudioRecovery(doc: Pick<Document, 'addEventListener' | 'removeEventListener'> = document) {
+  const resume = () => {
+    void unlockAudio().then(ready => {
+      if (!ready || !pendingReply) return
+      const reply = pendingReply; pendingReply = null
+      if (Date.now() <= reply.expires) reply.play()
+    })
+  }
+  doc.addEventListener('pointerdown', resume)
+  doc.addEventListener('visibilitychange', resume)
+  return () => {
+    doc.removeEventListener('pointerdown', resume)
+    doc.removeEventListener('visibilitychange', resume)
+    pendingReply = null
+  }
 }
