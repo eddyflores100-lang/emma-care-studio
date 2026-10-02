@@ -3,6 +3,8 @@
 // Panel de propiedades del objeto seleccionado: nombre, tamaño, color y
 // velocidad (mascotas). Si no hay nada seleccionado, muestra consejos.
 
+import { ObjectIllustration } from '@/components/studio/ObjectIllustration'
+import { PetIllustration } from '@/components/studio/PetIllustration'
 import { useStudio } from '@/lib/studio/store'
 import { catalogById } from '@/lib/studio/catalog'
 import { Input } from '@/components/ui/input'
@@ -58,7 +60,7 @@ export function PropertiesPanel({ className }: { className?: string }) {
               className="text-5xl drop-shadow"
               style={{ filter: obj.hue ? `hue-rotate(${obj.hue}deg) saturate(1.25)` : undefined }}
             >
-              {item.emoji}
+              {item.kind === 'pet' ? <PetIllustration species={obj.catalogId} /> : <ObjectIllustration species={obj.catalogId} fallback={item.emoji} />}
             </span>
           </div>
 

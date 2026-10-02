@@ -12,10 +12,13 @@
 //  · La pantalla tiembla cuando hay una persecución (y vibra el móvil)
 
 import React, { useRef } from 'react'
+import { ObjectIllustration } from '@/components/studio/ObjectIllustration'
 import { useStudio } from '@/lib/studio/store'
 import { catalogById, levelById } from '@/lib/studio/catalog'
 import { PetRuntime, WorldObject } from '@/lib/studio/types'
 import { sfx } from '@/lib/studio/sound'
+import { WorldBackdrop } from '@/components/studio/WorldBackdrop'
+import { PetIllustration } from '@/components/studio/PetIllustration'
 import { HousePanel } from '@/components/studio/HousePanel'
 import { cn } from '@/lib/utils'
 
@@ -90,7 +93,8 @@ export function WorldCanvas() {
   const levelDef = levelById[currentLevel]
   const now = Date.now()
   const shaking = now < shakeUntil
-  const raining = mode === 'play' && event?.kind === 'lluvia'
+  const rainyWeather = mode === 'play' && event?.kind === 'lluvia'
+  const raining = rainyWeather && (currentLevel === 'jardin' || currentLevel === 'playa')
   // ¿hay una persecución en marcha? (para la pista de calmar con un toque)
   const chaseActive =
     mode === 'play' && Object.values(pets).some((rt) => rt.chaseUntil > now)
@@ -218,7 +222,7 @@ export function WorldCanvas() {
     <div
       ref={canvasRef}
       className={cn(
-        'relative h-full w-full overflow-hidden rounded-3xl border-4 border-white shadow-md select-none',
+        'world-canvas relative h-full w-full overflow-hidden rounded-3xl border-4 border-white select-none',
         levelDef?.bg ?? 'grass',
         shaking && 'canvas-shake',
         ballPending && 'cursor-crosshair',
@@ -229,59 +233,7 @@ export function WorldCanvas() {
       role="application"
       aria-label={`Mundo del juego: ${levelDef?.name ?? 'Jardín'}`}
     >
-      {/* decoración según el mundo */}
-      {currentLevel === 'jardin' && (
-        <>
-          <div className="pointer-events-none absolute top-3 left-5 text-3xl opacity-80" aria-hidden>
-            ☁️
-          </div>
-          <div className="pointer-events-none absolute top-8 right-12 text-2xl opacity-70" aria-hidden>
-            ☁️
-          </div>
-          <div className="pointer-events-none absolute top-2 right-1/3 text-2xl" aria-hidden>
-            ☀️
-          </div>
-        </>
-      )}
-      {currentLevel === 'casa' && (
-        <>
-          <div className="pointer-events-none absolute top-3 left-6 text-3xl opacity-80" aria-hidden>
-            🖼️
-          </div>
-          <div className="pointer-events-none absolute top-3 right-8 text-3xl opacity-80" aria-hidden>
-            🪟
-          </div>
-          <div className="pointer-events-none absolute top-4 right-1/3 text-2xl opacity-70" aria-hidden>
-            🕰️
-          </div>
-        </>
-      )}
-      {currentLevel === 'hospital' && (
-        <>
-          <div className="pointer-events-none absolute top-3 left-6 text-3xl opacity-80" aria-hidden>
-            🩺
-          </div>
-          <div className="pointer-events-none absolute top-3 right-8 text-3xl opacity-80" aria-hidden>
-            🧪
-          </div>
-          <div className="pointer-events-none absolute top-2 right-1/3 text-3xl" aria-hidden>
-            ➕
-          </div>
-        </>
-      )}
-      {currentLevel === 'playa' && (
-        <>
-          <div className="pointer-events-none absolute top-2 right-8 text-3xl" aria-hidden>
-            ☀️
-          </div>
-          <div className="pointer-events-none absolute top-4 left-8 text-3xl opacity-90" aria-hidden>
-            ⛵
-          </div>
-          <div className="pointer-events-none absolute top-7 left-1/3 text-2xl opacity-70" aria-hidden>
-            🌊
-          </div>
-        </>
-      )}
+      <WorldBackdrop key={currentLevel} level={currentLevel} raining={rainyWeather} />
 
       {/* objetos del mundo */}
       {visible.map((obj) => {
@@ -301,12 +253,21 @@ export function WorldCanvas() {
         const chasing = !!(rt && rt.chaseUntil > now)
         const hidden = !!(rt && rt.hiding)
         const onTop = !!(rt && rt.onTopOf)
+        const activeCommand = rt?.obey && now < rt.obey.until ? rt.obey.cmd : null
+        const motion = !rt || hidden ? null : rt.state === 'sleep' || rt.state === 'rest' ? 'pet-breathe'
+          : rt.injured && rt.state === 'walk' ? 'pet-limp'
+          : chasing || activeCommand === 'run' || activeCommand === 'jump' ? 'pet-hop'
+          : activeCommand === 'dance' ? 'pet-dance'
+          : rt.state === 'walk' ? 'pet-walk'
+          : rt.state === 'eat' || rt.state === 'drink' ? 'pet-nibble'
+          : voiceText ? 'pet-respond' : 'pet-idle'
         return (
           <div
             key={obj.id}
             data-object-id={obj.id}
             className={cn(
-              'pop-in absolute touch-none',
+              'world-object absolute touch-none',
+              mode === 'play' && 'world-object-play',
               mode === 'edit'
                 ? 'cursor-grab active:cursor-grabbing'
                 : isPet
@@ -321,7 +282,7 @@ export function WorldCanvas() {
               transform: onTop
                 ? 'translate(-50%, -60%) translateY(-20px)'
                 : 'translate(-50%, -60%)',
-              zIndex: hidden ? 8 : onTop ? 30 : isPet ? 20 : 10,
+              zIndex: hidden ? 8 : onTop ? 30 : 10 + Math.floor(obj.y / 6) + (isPet ? 1 : 0),
             }}
             onPointerDown={(e) => pointerDown(e, obj)}
             onPointerMove={(e) => pointerMove(e, obj)}
@@ -340,10 +301,9 @@ export function WorldCanvas() {
             >
               <span
                 className={cn(
-                  'block drop-shadow-lg transition-transform',
-                  (chasing || rt?.obey?.cmd === 'run' || rt?.obey?.cmd === 'jump') && 'pet-hop',
-                  rt?.obey?.cmd === 'dance' && 'pet-dance',
-                  rt?.injured && rt.state === 'walk' && 'pet-limp',
+                  'world-sprite block transition-transform',
+                  isPet && 'illustrated-pet',
+                  motion,
                 )}
                 style={{
                   fontSize: `${Math.round(30 * obj.size)}px`,
@@ -352,14 +312,15 @@ export function WorldCanvas() {
                   lineHeight: 1,
                   opacity: hidden ? 0.55 : 1,
                   ['--face' as string]: rt?.facing ?? 1,
+                  ['--stride' as string]: `${Math.max(.28, Math.min(1.2, (obj.catalogId === 'turtle' ? 1 : .55) * 8 / (obj.speed ?? 8)))}s`,
                 } as React.CSSProperties}
               >
-                {item.emoji}
+                {isPet ? <PetIllustration species={obj.catalogId} sleeping={rt?.state === 'sleep' || rt?.state === 'rest'} happy={!!voiceText || (!!rt && rt.stats.felicidad >= 85)} /> : <ObjectIllustration species={obj.catalogId} fallback={item.emoji} />}
               </span>
             </div>
             {/* sombra en el suelo */}
             <div
-              className="pointer-events-none absolute left-1/2 -bottom-1.5 h-2 w-8 -translate-x-1/2 rounded-full bg-black/15 blur-[2px]"
+              className="world-contact-shadow pointer-events-none absolute left-1/2 -bottom-1.5 h-2 w-8 -translate-x-1/2 rounded-full"
               aria-hidden
             />
             {/* estados de la mascota */}
@@ -441,15 +402,15 @@ export function WorldCanvas() {
             {/* globo de voz: ¡Guau!, ¡Miau... (acompaña al sonido) */}
             {voiceText && (
               <span
-                className="say-pop absolute -top-8 left-1/2 -translate-x-1/2 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-xs font-black whitespace-nowrap text-slate-700 shadow-md"
+                className="say-pop absolute -top-8 left-1/2 -translate-x-1/2 rounded-full border border-amber-200 bg-white px-2 py-0.5 text-xs font-black max-w-[min(240px,60vw)] text-center text-slate-700 shadow-md"
                 aria-hidden
               >
                 {voiceText}
               </span>
             )}
-            {/* nombre (solo editor) */}
-            {mode === 'edit' && (
-              <span className="pointer-events-none absolute top-full left-1/2 mt-0.5 -translate-x-1/2 rounded-full bg-white/85 px-1.5 py-0.5 text-[10px] font-bold whitespace-nowrap text-slate-600 shadow-sm">
+            {/* Names stay visible while playing, making individual voice commands clearer. */}
+            {(mode === 'edit' || isPet) && (
+              <span className={cn("world-name pointer-events-none absolute top-full left-1/2 mt-1 -translate-x-1/2 rounded-full px-2 py-0.5 text-[10px] font-bold whitespace-nowrap", selected && "world-name-selected")}>
                 {obj.name}
               </span>
             )}
@@ -534,7 +495,7 @@ export function WorldCanvas() {
           className="absolute top-2 left-2 z-[70] rounded-full border-2 border-white bg-white/90 px-3 py-1 text-xs font-black text-slate-600 shadow-md"
           aria-live="polite"
         >
-          {event.kind === 'lluvia' && '🌧️ ¡Lluvia! Refúgialas'}
+          {event.kind === 'lluvia' && (raining ? '🌧️ ¡Lluvia! Refúgialas' : '🌧️ Aquí estamos a cubierto')}
           {event.kind === 'escasez' && '🥣 ¡Poca comida! Aliméntalas'}
           {event.kind === 'mariposa' && '🦋 ¡Visita de la mariposa!'}
           {event.kind === 'regalo' && '🎁 ¡Toca la caja sorpresa!'}

@@ -3,7 +3,9 @@
 // Biblioteca de objetos: pestañas Mascotas / Casa / Naturaleza.
 // Se puede arrastrar un objeto al lienzo (o tocarlo para añadirlo).
 
+import { PetIllustration } from '@/components/studio/PetIllustration'
 import { CATALOG } from '@/lib/studio/catalog'
+import { ObjectIllustration } from '@/components/studio/ObjectIllustration'
 import { useStudio } from '@/lib/studio/store'
 import { ObjKind } from '@/lib/studio/types'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -64,7 +66,7 @@ export function LibraryPanel({ className }: { className?: string }) {
                   title={`Añadir ${item.name}`}
                 >
                   <span className="text-3xl transition-transform group-hover:scale-110">
-                    {item.emoji}
+                    {item.kind === 'pet' ? <PetIllustration species={item.id} /> : <ObjectIllustration species={item.id} fallback={item.emoji} />}
                   </span>
                   <span className="text-xs font-bold text-slate-600">{item.name}</span>
                   {item.special && (

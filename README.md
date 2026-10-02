@@ -160,3 +160,12 @@ Hecho con 💛 para que las niñas creen juegos, no solo los jueguen.
 - Las frases con palabras desconocidas, órdenes contradictorias o movimientos negados se rechazan para evitar obediencias accidentales. Da una orden por frase y usa nombres distintos.
 
 Verificación automática: 61 pruebas del motor, TypeScript, ESLint y exportación estática. El reconocimiento depende del navegador, permiso de micrófono, conexión y ruido ambiental; conviene comprobarlo en el teléfono real.
+
+
+## v0.11 — mundos ilustrados y animaciones coherentes
+
+Los cuatro escenarios usan ilustraciones vectoriales propias: jardín con colinas y sendero, casa con madera y alfombra, clínica con azulejos suaves y playa con olas. Las 15 especies comparten trazo, proporciones y paleta; sus retratos coinciden en el mundo, biblioteca, propiedades y selector. Los principales objetos de cuidado, refugios y árboles también tienen ilustraciones propias.
+
+Las mascotas caminan, respiran al descansar, comen y saludan con movimientos diferenciados. Las sombras y el orden por profundidad anclan los personajes al suelo; sus nombres permanecen visibles. Nubes y olas se mueven suavemente, y la lluvia cambia la iluminación solo mientras dura el evento. Dentro de casa o del hospital no cae lluvia ni penaliza la higiene de las mascotas.
+
+Las animaciones respetan la preferencia del dispositivo de reducir movimiento. El botón de recuperación horizontal permanece visible en vertical. No requiere descargas de imágenes ni paquetes nuevos. Validación: 62 pruebas del motor, TypeScript, ESLint, exportación estática y revisión de los SVG renderizados.

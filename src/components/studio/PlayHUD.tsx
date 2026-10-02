@@ -7,8 +7,9 @@
 //  · 🧰 abre la mochila (panel derecho oculto) con TODO lo demás
 // El juego ahora ocupa toda la pantalla; esto flota encima.
 
-import { useStudio } from '@/lib/studio/store'
 import { catalogById } from '@/lib/studio/catalog'
+import { PetIllustration } from '@/components/studio/PetIllustration'
+import { useStudio } from '@/lib/studio/store'
 import { PlayerAction } from '@/lib/studio/types'
 import { VoiceControls } from '@/components/studio/VoiceControls'
 import { cn } from '@/lib/utils'
@@ -54,7 +55,6 @@ export function PlayHUD() {
         </button>
       ) : (
         pets.map((p) => {
-          const item = catalogById[p.catalogId]
           const pRt = petsMap[p.id]
           return (
             <button
@@ -66,7 +66,7 @@ export function PlayHUD() {
               title={`${p.name}${pRt ? ` · Nv ${pRt.lvl}` : ''}`}
             >
               <span className="text-lg leading-none" aria-hidden>
-                {item?.emoji ?? '🐾'}
+                <PetIllustration species={p.catalogId} />
               </span>
               {pRt && pRt.lvl > 1 && (
                 <span className="text-[9px] font-black text-violet-600">{pRt.lvl}</span>
