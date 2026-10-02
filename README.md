@@ -169,3 +169,10 @@ Los cuatro escenarios usan ilustraciones vectoriales propias: jardín con colina
 Las mascotas caminan, respiran al descansar, comen y saludan con movimientos diferenciados. Las sombras y el orden por profundidad anclan los personajes al suelo; sus nombres permanecen visibles. Nubes y olas se mueven suavemente, y la lluvia cambia la iluminación solo mientras dura el evento. Dentro de casa o del hospital no cae lluvia ni penaliza la higiene de las mascotas.
 
 Las animaciones respetan la preferencia del dispositivo de reducir movimiento. El botón de recuperación horizontal permanece visible en vertical. No requiere descargas de imágenes ni paquetes nuevos. Validación: 62 pruebas del motor, TypeScript, ESLint, exportación estática y revisión de los SVG renderizados.
+
+
+## v0.11.1 — controles que dejan ver el juego
+
+La barra inferior reserva su propio espacio fuera del lienzo: 50 px, o 46 px en móviles horizontales, más el área segura del sistema. Solo muestra la mascota seleccionada, micrófono, entrada escrita y **Controles**. El selector de animales, cuidados, mapa y mochila aparecen al abrir el panel, con desplazamiento propio. Se cierra al tocar el mundo, pulsar Escape, lanzar la pelota o abrir mapa/mochila. La escucha sigue activa mientras el panel está cerrado. Las transcripciones aparecen brevemente y no capturan toques.
+
+Validación: 62 pruebas del motor, TypeScript, ESLint y exportación estática.

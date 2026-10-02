@@ -126,7 +126,7 @@ export default function Home() {
       ) : (
         /* ===== JUGAR: el mundo llena TODO; dock flotante + mochila ===== */
         <div className="relative min-h-0 flex-1">
-          <div className="absolute inset-0 p-2">
+          <div className="emma-play-canvas absolute inset-0 p-2">
             <WorldCanvas />
           </div>
           <PlayHUD />

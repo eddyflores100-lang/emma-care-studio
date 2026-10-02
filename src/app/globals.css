@@ -968,3 +968,25 @@ body {
 }
 
 .object-illustration { display: block; width: 1.35em; height: 1.46em; overflow: visible; }
+
+
+/* A reserved rail keeps controls completely outside the playable canvas. */
+.emma-play-canvas { bottom: calc(50px + env(safe-area-inset-bottom, 0px)); }
+.emma-play-tools { position: absolute; inset: auto 0 0; z-index: 40; padding-bottom: env(safe-area-inset-bottom, 0px); background: #fffaf0; border-top: 1px solid #dbc8ad; }
+.emma-play-rail { display: flex; align-items: center; justify-content: flex-end; gap: 6px; height: 50px; padding: 4px max(10px, env(safe-area-inset-right, 0px)); }
+.emma-selected-name { margin-right: auto; padding-left: max(0px, env(safe-area-inset-left, 0px)); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 800; color: #68594b; }
+.emma-play-rail .emma-dock-btn { width: 40px; height: 40px; box-shadow: none; }
+.emma-controls-toggle { flex-shrink: 0; min-height: 40px; padding: 0 12px; border: 1px solid #cbb294; border-radius: 14px; background: #f4e6d1; color: #68594b; font-size: 12px; font-weight: 800; }
+.emma-control-panel { left: auto; right: max(8px, env(safe-area-inset-right, 0px)); bottom: calc(56px + env(safe-area-inset-bottom, 0px)); transform: none; width: min(360px, calc(100vw - 20px)); max-height: min(240px, 55dvh); overflow: auto; flex-wrap: wrap; padding: 10px; border-radius: 18px; gap: 8px; background: #fffaf0f5; border-color: #dbc8ad; box-shadow: 0 8px 24px #68594b26; }
+.emma-control-panel .emma-dock-pet { min-height: 44px; }
+.emma-control-panel .emma-dock-btn { min-width: 44px; min-height: 44px; }
+.emma-dock-btn:disabled { opacity: .45; }
+.emma-play-tools .emma-voice-cap { position: absolute; left: 8px; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); max-width: min(65vw, 360px); pointer-events: none; }
+.emma-play-tools:has(.emma-control-panel) .emma-voice-cap { display: none; }
+@media (orientation: landscape) and (max-height: 520px) {
+  .emma-play-canvas { bottom: calc(46px + env(safe-area-inset-bottom, 0px)); }
+  .emma-play-rail { height: 46px; }
+}
+
+.emma-play-tools .emma-voice-cap { animation: emma-feedback-hide 4s linear forwards; }
+@keyframes emma-feedback-hide { 0%,85% { opacity: 1; visibility: visible; } 100% { opacity: 0; visibility: hidden; } }

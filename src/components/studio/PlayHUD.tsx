@@ -7,6 +7,7 @@
 //  · 🧰 abre la mochila (panel derecho oculto) con TODO lo demás
 // El juego ahora ocupa toda la pantalla; esto flota encima.
 
+import { useEffect, useRef, useState } from 'react'
 import { catalogById } from '@/lib/studio/catalog'
 import { PetIllustration } from '@/components/studio/PetIllustration'
 import { useStudio } from '@/lib/studio/store'
@@ -20,6 +21,18 @@ export function openDrawer() {
 }
 
 export function PlayHUD() {
+  const [expanded, setExpanded] = useState(false)
+  const toolsRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!expanded) return
+    const closeOutside = (event: PointerEvent) => {
+      if (!toolsRef.current?.contains(event.target as Node)) setExpanded(false)
+    }
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false) }
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', closeOutside); document.removeEventListener('keydown', escape) }
+  }, [expanded])
   const mode = useStudio((s) => s.mode)
   const objects = useStudio((s) => s.objects)
   const petsMap = useStudio((s) => s.pets)
@@ -43,12 +56,20 @@ export function PlayHUD() {
     rt && sel ? now - (actionCd[`${sel.id}:${a}`] ?? 0) < 3500 : false
 
   return (
-    <section className="emma-dock" aria-label="Cuidado rápido de mascotas">
+    <section ref={toolsRef} className="emma-play-tools" aria-label="Controles del juego">
+      <div className="emma-play-rail">
+        <span className="emma-selected-name">{sel ? sel.name : 'Toca una mascota'}</span>
+        <VoiceControls />
+        <button type="button" className="emma-controls-toggle" aria-expanded={expanded} aria-controls="emma-care-panel" onClick={() => setExpanded(!expanded)}>
+          {expanded ? '✕ Cerrar' : '☰ Controles'}
+        </button>
+      </div>
+      {expanded && <section id="emma-care-panel" className="emma-dock emma-control-panel" aria-label="Cuidado rápido de mascotas">
       {/* mini selector de mascotas */}
       {pets.length === 0 ? (
         <button
           type="button"
-          onClick={openDrawer}
+          onClick={() => { setExpanded(false); openDrawer() }}
           className="rounded-full px-2 py-1 text-[11px] font-black text-slate-500"
         >
           🐾 Sin mascotas: añade una en 🧰
@@ -63,6 +84,8 @@ export function PlayHUD() {
               onClick={() => select(p.id)}
               data-on={p.id === selectedId ? '1' : '0'}
               className="emma-dock-pet"
+              aria-label={`Seleccionar ${p.name}`}
+              aria-pressed={p.id === selectedId}
               title={`${p.name}${pRt ? ` · Nv ${pRt.lvl}` : ''}`}
             >
               <span className="text-lg leading-none" aria-hidden>
@@ -78,7 +101,7 @@ export function PlayHUD() {
         })
       )}
 
-      {pets.length === 0 && <><VoiceControls /><button type="button" className="emma-dock-btn" aria-label="Mapa de mascotas" onClick={() => window.dispatchEvent(new CustomEvent('emma-drawer-open',{detail:{section:'mapa'}}))}>🗺️</button></>}
+      {pets.length === 0 && <><button type="button" className="emma-dock-btn" aria-label="Mapa de mascotas" onClick={() => { setExpanded(false); window.dispatchEvent(new CustomEvent('emma-drawer-open',{detail:{section:'mapa'}})) }}>🗺️</button></>}
       {pets.length > 0 && (
         <>
           <span className="emma-dock-sep" aria-hidden />
@@ -90,6 +113,8 @@ export function PlayHUD() {
             data-cool={cooling('alimentar') ? '1' : '0'}
             className="emma-dock-btn"
             title="Dar comida 🍖"
+            aria-label="Alimentar mascota seleccionada"
+            disabled={!sel}
           >
             🍖
           </button>
@@ -99,12 +124,14 @@ export function PlayHUD() {
             data-cool={cooling('acariciar') ? '1' : '0'}
             className="emma-dock-btn"
             title="Acariciar 🤗"
+            aria-label="Acariciar mascota seleccionada"
+            disabled={!sel}
           >
             🤗
           </button>
           <button
             type="button"
-            onClick={toggleBallMode}
+            onClick={() => { toggleBallMode(); setExpanded(false) }}
             className={cn(
               'emma-dock-btn',
               ballPending ? 'border-rose-500 bg-rose-500 text-white' : 'border-lime-300 bg-lime-50',
@@ -114,14 +141,13 @@ export function PlayHUD() {
             🎾
           </button>
 
-          <VoiceControls />
           {rt?.hospitalStatus === 'waiting' && <button type="button" onClick={() => playerAction('curar')} className="emma-dock-btn shrink-0 border-teal-300 bg-teal-50" title="Iniciar tratamiento · 15 monedas" aria-label="Iniciar tratamiento por 15 monedas">🩺</button>}
-          <button type="button" className="emma-dock-btn shrink-0 border-sky-300 bg-sky-50" aria-label="Mapa de mascotas" onClick={() => window.dispatchEvent(new CustomEvent('emma-drawer-open',{detail:{section:'mapa'}}))}>🗺️</button>
+          <button type="button" className="emma-dock-btn shrink-0 border-sky-300 bg-sky-50" aria-label="Mapa de mascotas" onClick={() => { setExpanded(false); window.dispatchEvent(new CustomEvent('emma-drawer-open',{detail:{section:'mapa'}})) }}>🗺️</button>
 
           {rt?.injured && currentLevel !== 'hospital' && (
             <button
               type="button"
-              onClick={() => openDrawer()}
+              onClick={() => { setExpanded(false); openDrawer() }}
               className="emma-dock-btn shrink-0 border-sky-300 bg-sky-50"
               title="Lleva al hospital: ábrelo en la mochila 🚑"
             >
@@ -132,7 +158,7 @@ export function PlayHUD() {
           <span className="emma-dock-sep" aria-hidden />
           <button
             type="button"
-            onClick={openDrawer}
+            onClick={() => { setExpanded(false); openDrawer() }}
             className="emma-dock-btn shrink-0 border-violet-300 bg-violet-50"
             title="Abrir mochila: baño, sueño, órdenes, barras y más"
           >
@@ -140,6 +166,7 @@ export function PlayHUD() {
           </button>
         </>
       )}
+      </section>}
     </section>
   )
 }
