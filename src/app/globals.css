@@ -1002,3 +1002,18 @@ body {
 .scene-location { position:absolute; left:12px; top:12px; padding:5px 9px; border-radius:10px; background:#fff9; color:#526450; font-size:11px; font-weight:800; }
 .adventure-panel { font-size: 13px; line-height: 1.5; }
 .adventure-panel progress { accent-color: #6b9d79; }
+
+/* Immersive play: the world fills the viewport; tools float only in one corner. */
+.emma-immersive .emma-play-canvas { inset: 0; padding: 0; }
+.emma-immersive .world-canvas { border: 0; border-radius: 0; box-shadow: none; }
+.emma-immersive .emma-play-tools { inset: auto max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) auto; width: auto; border: 0; border-radius: 24px; background: #fff9fce8; box-shadow: 0 3px 16px #a39ab426; padding: 0; }
+.emma-immersive .emma-play-rail { height: 46px; padding: 3px 6px; gap: 4px; }
+.emma-immersive .emma-selected-name { display:none; }
+.emma-immersive .emma-controls-toggle { background:#eee4ff; color:#685575; border-color:#d9c9ec; }
+.emma-game-settings { width:100%; }
+.emma-game-settings .emma-top { flex-wrap:wrap; border:0; padding:4px; background:transparent; }
+.emma-game-settings .emma-top h1, .emma-game-settings .emma-logo { display:none; }
+.emma-game-settings .emma-levels { padding:6px 0; }
+.emma-immersive .emma-control-panel { bottom:54px; right:0; background:#fffbfef5; border-color:#e8d8ef; max-height:70dvh; }
+.emma-immersive .world-name { background:#fff8fbe8; color:#685575; }
+.emma-immersive .scene-light { background: linear-gradient(135deg,#fffaff33,transparent 65%); }

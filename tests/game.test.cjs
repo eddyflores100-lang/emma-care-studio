@@ -617,3 +617,30 @@ test('wellbeing bonuses stop at the daily limit but reset on a new day', () => {
   now+=86400000;store.getState().gameTick();assert.equal(store.getState().coins,coins+2)
   assert.equal(store.getState().progression.wellnessRewards,1)
 })
+
+test('natural name calls keep individual targeting', () => {
+  start(); const max = pet(), cat = pet('cat')
+  assert.equal(command('Oye, Max'), 'ok')
+  assert.ok(store.getState().say[max.id])
+  assert.equal(store.getState().say[cat.id], undefined)
+  now += 1000
+  assert.equal(command('Max ven por aquí'), 'ok')
+  assert.equal(store.getState().pets[max.id].obey.cmd, 'come')
+})
+test('bonded rivals still play chase outside hospital', () => {
+  start(); const max = pet(), cat = pet('cat'), s = store.getState()
+  store.setState({ objects:s.objects.map(o=>o.id===max.id||o.id===cat.id?{...o,x:50,y:50}:o), pets:{...s.pets,
+    [max.id]:{...s.pets[max.id],bonds:{[cat.id]:30},state:'idle',wanderAt:now+5000},
+    [cat.id]:{...s.pets[cat.id],bonds:{[max.id]:30},state:'idle',wanderAt:now+5000}} })
+  store.getState().moveTick(16)
+  assert.ok(store.getState().pets[max.id].chaseUntil > now)
+  assert.ok(store.getState().pets[cat.id].chaseUntil > now)
+})
+
+test('autonomous toy play cannot reuse a food or bed destination', () => {
+  start(); const max = pet(), s = store.getState()
+  store.setState({objects:s.objects.filter(o=>o.id===max.id||o.catalogId==='toy').map(o=>({...o,x:50,y:50})),pets:{[max.id]:{...s.pets[max.id],targetKind:'food',state:'idle',wanderAt:0}}})
+  store.getState().moveTick(16)
+  assert.equal(store.getState().pets[max.id].targetKind,'random')
+  assert.notEqual(store.getState().pets[max.id].state,'eat')
+})
