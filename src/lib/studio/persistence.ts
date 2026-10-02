@@ -1,3 +1,4 @@
+import { progressionSchema, WORLD_IDS } from './progression'
 import { z } from 'zod'
 import { catalogById } from './catalog'
 import type { SavedProject, PetRuntime, WorldObject } from './types'
@@ -5,7 +6,7 @@ import type { SavedProject, PetRuntime, WorldObject } from './types'
 export const SAVE_KEY = 'emma-care-studio-v1'
 export const BACKUP_KEY = 'emma-care-studio-backup'
 export const MAX_PROJECT_BYTES = 2_000_000
-const level = z.enum(['jardin', 'casa', 'hospital', 'playa'])
+const level = z.enum(WORLD_IDS)
 const id = z.string().min(1).max(100).refine(v => !['__proto__', 'constructor', 'prototype'].includes(v))
 const number = (min: number, max: number) => z.number().finite().min(min).max(max)
 const stats = z.object({ felicidad: number(0, 100), comida: number(0, 100),
@@ -31,8 +32,9 @@ const schema = z.object({
     stat: z.enum(['felicidad', 'comida', 'energia', 'higiene', 'descanso']), amount: number(0, 100),
   })).max(200).default([]),
   coins: number(0, 1_000_000_000).default(0), savedAt: z.string().max(100).default(''),
-  unlockedLevels: z.array(level).max(4).default(['jardin']), currentLevel: level.default('jardin'),
+  unlockedLevels: z.array(level).max(8).default(['jardin']), currentLevel: level.default('jardin'),
   pets: z.record(id, savedPet).optional(),
+  progression: progressionSchema.optional(),
   careMissions: z.object({alimentar:number(0,2).int(),acariciar:number(0,2).int(),banar:number(0,2).int()}).optional(),
 })
 
@@ -56,9 +58,9 @@ export function decodeProject(raw: string): SavedProject {
 
 export function snapshotProject(s: { objects: WorldObject[]; rules: SavedProject['rules']; coins: number;
   unlockedLevels: NonNullable<SavedProject['unlockedLevels']>; currentLevel: NonNullable<SavedProject['currentLevel']>;
-  pets: Record<string, PetRuntime>; careMissions?: SavedProject['careMissions'] }): SavedProject {
+  pets: Record<string, PetRuntime>; progression?: SavedProject['progression']; careMissions?: SavedProject['careMissions'] }): SavedProject {
   const now = Date.now()
-  return { version: 3, careMissions:s.careMissions, objects: s.objects, rules: s.rules, coins: s.coins,
+  return { version: 3, progression:s.progression, careMissions:s.careMissions, objects: s.objects, rules: s.rules, coins: s.coins,
     unlockedLevels: s.unlockedLevels, currentLevel: s.currentLevel, savedAt: new Date().toISOString(),
     pets: Object.fromEntries(s.objects.filter(o => catalogById[o.catalogId]?.kind === 'pet' && s.pets[o.id])
       .map(o => { const rt = s.pets[o.id]; return [o.id, {

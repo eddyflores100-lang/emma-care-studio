@@ -1,3 +1,4 @@
+import { memo } from 'react'
 const DRAWINGS: Record<string, React.ReactNode> = {
   house: <><path d="M16 50L50 18 84 50v43H16Z" fill="#f4ddbb" /><path d="M9 50L50 12l41 38-8 8-33-30-33 30Z" fill="#ce927e" /><path d="M40 93V63h20v30" fill="#a7bb9c" /><rect x="23" y="59" width="12" height="13" rx="2" fill="#b6d6d5" /><circle cx="54" cy="79" r="2" fill="#62584d" stroke="none" /></>,
   bed: <><path d="M12 83V41h76v42" fill="#d8b68d" /><rect x="15" y="52" width="70" height="26" rx="8" fill="#f6e7d0" /><path d="M16 65h69v19H16Z" fill="#a9c6b1" /><rect x="21" y="49" width="24" height="14" rx="5" fill="#fff9ec" /><path d="M18 84v10M83 84v10" /></>,
@@ -13,10 +14,10 @@ const DRAWINGS: Record<string, React.ReactNode> = {
   pond: <><ellipse cx="50" cy="73" rx="44" ry="24" fill="#b2c796" /><ellipse cx="50" cy="71" rx="36" ry="18" fill="#94c8ca" /><path d="M27 72q8-5 15 0M54 78q8 4 17-1" fill="none" stroke="#d8eae1" strokeWidth="3" /><path d="M55 61q14-17 25 0q-12 8-25 0Z" fill="#88ad87" /></>,
   toy: <><circle cx="27" cy="24" r="12" fill="#c7a278" /><circle cx="73" cy="24" r="12" fill="#c7a278" /><ellipse cx="50" cy="73" rx="25" ry="25" fill="#c7a278" /><ellipse cx="23" cy="74" rx="12" ry="15" fill="#c7a278" /><ellipse cx="77" cy="74" rx="12" ry="15" fill="#c7a278" /><ellipse cx="32" cy="97" rx="13" ry="8" fill="#c7a278" /><ellipse cx="68" cy="97" rx="13" ry="8" fill="#c7a278" /><circle cx="50" cy="40" r="28" fill="#c7a278" /><ellipse cx="50" cy="51" rx="13" ry="10" fill="#ecd4b0" /><path d="M46 48h8l-4 4Z" fill="#62584d" /><path d="M37 37h0M63 37h0" strokeWidth="5" /><path d="M35 70l15 7-15 7ZM65 70L50 77l15 7Z" fill="#b8837d" /></>,
 }
-export function ObjectIllustration({ species, fallback }: { species: string; fallback: string }) {
+export const ObjectIllustration = memo(function ObjectIllustration({ species, fallback }: { species: string; fallback: string }) {
   const drawing = DRAWINGS[species]
   if (!drawing) return <>{fallback}</>
   return <svg className="object-illustration" viewBox="0 0 100 108" aria-hidden="true" focusable="false">
     <g stroke="#62584d" strokeWidth="2.6" strokeLinejoin="round" strokeLinecap="round">{drawing}</g>
   </svg>
-}
+})

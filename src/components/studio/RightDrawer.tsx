@@ -8,6 +8,7 @@
 
 import { useEffect, useState } from 'react'
 import { petPersonality } from '@/lib/studio/personality'
+import { ProgressionPanel } from '@/components/studio/ProgressionPanel'
 import { useStudio } from '@/lib/studio/store'
 import { STATS, STAT_KEYS, LEVELS, catalogById } from '@/lib/studio/catalog'
 import { Command, PlayerAction } from '@/lib/studio/types'
@@ -32,7 +33,6 @@ const ORDERS: { id: Command; emoji: string; label: string }[] = [
 ]
 
 export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
-  const careMissions = useStudio(s=>s.careMissions)
   const [open, setOpen] = useState(false)
   const [sec, setSec] = useState<string | null>(mode === 'edit' ? 'objetos' : 'estado')
 
@@ -55,8 +55,10 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
       const section = (event as CustomEvent<{section?:string}>).detail?.section
       if (section) setSec(section)
     }
+    const onClose=()=>setOpen(false)
+    window.addEventListener('emma-drawer-close',onClose)
     window.addEventListener('emma-drawer-open', onOpen)
-    return () => window.removeEventListener('emma-drawer-open', onOpen)
+    return () => { window.removeEventListener('emma-drawer-open', onOpen); window.removeEventListener('emma-drawer-close',onClose) }
   }, [])
 
   const pets = objects.filter(
@@ -77,13 +79,7 @@ export function RightDrawer({ mode }: { mode: 'edit' | 'play' }) {
 
   // ===== secciones según modo =====
   const playSections = [
-    {id:'misiones',emoji:'🎯',title:'Misiones para ganar monedas',body:<div className="space-y-2 text-xs font-bold text-slate-600">
-      <p>Cuida a cualquier mascota. Cada tres cuidados del mismo tipo ganas 5 monedas extra.</p>
-      <p>🍖 Alimentar: {careMissions.alimentar}/3 · +3 🪙 por cuidado</p>
-      <p>🤗 Acariciar: {careMissions.acariciar}/3 · +2 🪙 por cuidado</p>
-      <p>🫧 Bañar: {careMissions.banar}/3 · +3 🪙 por cuidado</p>
-      <p>🩺 Tratamiento: 15 🪙. Puedes cuidar a pacientes que esperan tratamiento.</p>
-    </div>},
+    {id:'misiones',emoji:'🎯',title:'Aventuras, premios y récords',body:<ProgressionPanel />},
     {
       id: 'mapa', emoji: '🗺️', title: 'Dónde están mis mascotas',
       body: <div className="space-y-3">{LEVELS.map(level => {

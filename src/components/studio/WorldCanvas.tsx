@@ -19,6 +19,7 @@ import { PetRuntime, WorldObject } from '@/lib/studio/types'
 import { sfx } from '@/lib/studio/sound'
 import { WorldBackdrop } from '@/components/studio/WorldBackdrop'
 import { PetIllustration } from '@/components/studio/PetIllustration'
+import { ChallengeOverlay } from '@/components/studio/ChallengeOverlay'
 import { HousePanel } from '@/components/studio/HousePanel'
 import { cn } from '@/lib/utils'
 
@@ -69,6 +70,8 @@ export function WorldCanvas() {
     null,
   )
 
+  const challenge = useStudio(s => s.challenge)
+  const accessory = useStudio(s => s.progression.equipped)
   const mode = useStudio((s) => s.mode)
   const objects = useStudio((s) => s.objects)
   const pets = useStudio((s) => s.pets)
@@ -94,7 +97,7 @@ export function WorldCanvas() {
   const now = Date.now()
   const shaking = now < shakeUntil
   const rainyWeather = mode === 'play' && event?.kind === 'lluvia'
-  const raining = rainyWeather && (currentLevel === 'jardin' || currentLevel === 'playa')
+  const raining = rainyWeather && !['casa','hospital'].includes(currentLevel)
   // ¿hay una persecución en marcha? (para la pista de calmar con un toque)
   const chaseActive =
     mode === 'play' && Object.values(pets).some((rt) => rt.chaseUntil > now)
@@ -318,6 +321,7 @@ export function WorldCanvas() {
                 {isPet ? <PetIllustration species={obj.catalogId} sleeping={rt?.state === 'sleep' || rt?.state === 'rest'} happy={!!voiceText || (!!rt && rt.stats.felicidad >= 85)} /> : <ObjectIllustration species={obj.catalogId} fallback={item.emoji} />}
               </span>
             </div>
+            {isPet && accessory && <span className="pet-prize" aria-label={`Accesorio: ${accessory}`}>{accessory==='corona'?'👑':accessory==='sombrero'?'👒':accessory==='pañuelo'?'🎀':'✨'}</span>}
             {/* sombra en el suelo */}
             <div
               className="world-contact-shadow pointer-events-none absolute left-1/2 -bottom-1.5 h-2 w-8 -translate-x-1/2 rounded-full"
@@ -418,6 +422,7 @@ export function WorldCanvas() {
         )
       })}
 
+      {mode === 'play' && <ChallengeOverlay />}
       {/* pelota lanzada por el dueño */}
       {mode === 'play' && ball && ball.until > now && (
         <span
@@ -490,7 +495,7 @@ export function WorldCanvas() {
       ))}
 
       {/* aviso del evento sorpresa activo */}
-      {mode === 'play' && event && (
+      {mode === 'play' && event && !challenge && (
         <div
           className="absolute top-2 left-2 z-[70] rounded-full border-2 border-white bg-white/90 px-3 py-1 text-xs font-black text-slate-600 shadow-md"
           aria-live="polite"
@@ -503,7 +508,7 @@ export function WorldCanvas() {
       )}
 
       {/* pista: ¡tocar la pantalla los calma cuando hay persecución! */}
-      {chaseActive && (
+      {chaseActive && !challenge && (
         <div className="pointer-events-none absolute inset-x-0 bottom-2 z-[70] flex justify-center">
           <span className="animate-pulse rounded-full bg-violet-600 px-3 py-1 text-xs font-black text-white shadow-lg">
             👋 ¡Toca la pantalla para calmarlos!

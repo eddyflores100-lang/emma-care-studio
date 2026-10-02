@@ -516,3 +516,104 @@ test('indoor worlds protect pets from rain without requiring a second shelter', 
     store.getState().gameTick();assert.deepEqual(store.getState().pets[max.id].stats,dry,level)
   }
 })
+
+test('missions reward once and progress survives save and reload', () => {
+  start();const max=pet();store.getState().select(max.id)
+  for(let i=0;i<3;i++){store.getState().playerAction('acariciar');now+=4000}
+  const before=store.getState().coins
+  store.getState().claimMission('jardin-cuidado');assert.equal(store.getState().coins,before+8)
+  store.getState().claimMission('jardin-cuidado');assert.equal(store.getState().coins,before+8)
+  store.getState().equipPrize('pañuelo');store.getState().saveSilent()
+  store.setState({hydrated:false,progression:require('../src/lib/studio/progression.ts').freshProgression()});store.getState().hydrate()
+  assert.ok(store.getState().progression.claimed.includes('jardin-cuidado'));assert.equal(store.getState().progression.equipped,'pañuelo')
+})
+test('circuits require order, reject duplicate hits and reward completion only', () => {
+  start();store.getState().select(pet().id);store.getState().startChallenge('circuito')
+  assert.ok(store.getState().challenge);store.getState().hitChallenge(2)
+  assert.equal(store.getState().challenge.mistakes,1);assert.equal(store.getState().progression.counters['circuito:jardin'],undefined)
+  store.getState().hitChallenge(0);store.getState().hitChallenge(0)
+  assert.equal(store.getState().challenge.targets.filter(t=>t.found).length,1)
+  for(let id=1;id<5;id++)store.getState().hitChallenge(id)
+  assert.equal(store.getState().challenge,null);assert.equal(store.getState().progression.counters['circuito:jardin'],1)
+})
+test('timed out challenges cannot receive awards', () => {
+  start();store.getState().select(pet().id);store.getState().startChallenge('buscar');now+=60000
+  store.getState().hitChallenge(0);assert.equal(store.getState().challenge,null);assert.equal(store.getState().progression.weekPoints,0)
+})
+test('daily hospital aid cannot be farmed or claimed without finishing', () => {
+  start();store.setState({coins:0});store.getState().select(pet().id);store.getState().startChallenge('ayuda')
+  store.getState().hitChallenge(0);assert.equal(store.getState().coins,0)
+  for(let id=1;id<5;id++)store.getState().hitChallenge(id)
+  assert.equal(store.getState().coins,20);store.setState({coins:0});store.getState().startChallenge('ayuda');assert.equal(store.getState().challenge,null)
+})
+test('new worlds require missions and initialize their new resident', () => {
+  start();store.setState({coins:1000});store.getState().setLevel('parque');assert.equal(store.getState().currentLevel,'jardin')
+  store.setState({progression:{...store.getState().progression,claimed:['jardin-cuidado','jardin-buscar']}})
+  store.getState().setLevel('parque');assert.equal(store.getState().currentLevel,'parque');assert.equal(store.getState().coins,900)
+  const resident=store.getState().objects.find(o=>o.level==='parque'&&o.catalogId==='rabbit');assert.ok(store.getState().pets[resident.id])
+  store.getState().saveSilent();store.setState({hydrated:false});store.getState().hydrate();assert.ok(store.getState().unlockedLevels.includes('parque'))
+  assert.equal(parseVoiceCommand('Nube al bosque',[resident]).level,'bosque')
+})
+test('new weekly records reset competitive bests while retaining lifetime records', () => {
+  const {freshProgression,rollProgress,weekKey}=require('../src/lib/studio/progression.ts')
+  const first=Date.UTC(2026,9,2),next=first+7*86400000
+  const p={...freshProgression(),week:weekKey(first),weekPoints:100,best:{'jardin:buscar':90},weekBest:{'jardin:buscar':90}}
+  const rolled=rollProgress(p,next);assert.equal(rolled.weekPoints,0);assert.deepEqual(rolled.weekBest,{})
+  assert.equal(rolled.best['jardin:buscar'],90);assert.equal(rolled.history[0].points,100)
+})
+test('repeating a completed challenge at the same score cannot inflate weekly points', () => {
+  start();store.getState().select(pet().id)
+  const finish=()=>{store.getState().startChallenge('buscar');for(let i=0;i<5;i++)store.getState().hitChallenge(i)}
+  finish();const points=store.getState().progression.weekPoints;finish();assert.equal(store.getState().progression.weekPoints,points)
+})
+test('care coin rewards are capped daily without preventing care', () => {
+  start();const max=pet();store.getState().select(max.id)
+  const {rollProgress}=require('../src/lib/studio/progression.ts')
+  store.setState({progression:{...rollProgress(store.getState().progression),careRewards:30},pets:{...store.getState().pets,[max.id]:{...store.getState().pets[max.id],lvl:9,stats:{...store.getState().pets[max.id].stats,felicidad:40}}}})
+  const coins=store.getState().coins;store.getState().playerAction('acariciar');assert.equal(store.getState().coins,coins);assert.ok(store.getState().pets[max.id].stats.felicidad>40)
+})
+test('a new project clears adventure records and borrowed cosmetics cannot be equipped', () => {
+  start();store.getState().equipPrize('corona');assert.equal(store.getState().progression.equipped,null)
+  store.setState({progression:{...store.getState().progression,claimed:['jardin-cuidado']}});store.getState().newProject()
+  assert.deepEqual(store.getState().progression.claimed,[])
+})
+
+test('a waiting patient cannot be stranded by an already-used daily aid', () => {
+  start();const max=pet();const s=store.getState(),{dayKey}=require('../src/lib/studio/progression.ts')
+  store.setState({coins:0,currentLevel:'hospital',unlockedLevels:['jardin','hospital'],
+    progression:{...s.progression,aidDay:dayKey()},objects:s.objects.map(o=>o.id===max.id?{...o,level:'hospital'}:o),
+    pets:{...s.pets,[max.id]:{...s.pets[max.id],sick:true,hospitalStatus:'waiting',state:'rest'}}})
+  store.getState().select(max.id);store.getState().startChallenge('ayuda');assert.ok(store.getState().challenge)
+  for(let i=0;i<5;i++)store.getState().hitChallenge(i)
+  assert.equal(store.getState().pets[max.id].hospitalStatus,'treating');assert.equal(store.getState().coins,0)
+})
+test('stopping or leaving a world cancels a challenge and cannot retain reward targets', () => {
+  start();store.getState().select(pet().id);store.getState().startChallenge('buscar');store.getState().stopPlay();assert.equal(store.getState().challenge,null)
+  store.getState().startPlay();store.getState().select(pet().id);store.getState().startChallenge('buscar')
+  store.setState({unlockedLevels:['jardin','casa']});store.getState().setLevel('casa');assert.equal(store.getState().challenge,null)
+})
+
+test('finger petting advances care missions and distinct daily pets', () => {
+  start();const {catalogById}=require('../src/lib/studio/catalog.ts')
+  const pets=store.getState().objects.filter(o=>catalogById[o.catalogId]?.kind==='pet').slice(0,3)
+  for(const p of pets)store.getState().petPet(p.id)
+  assert.equal(store.getState().progression.dailyPets.length,pets.length)
+  assert.equal(store.getState().progression.counters['care:jardin'],pets.length)
+  const coins=store.getState().coins;store.getState().claimDaily();assert.equal(store.getState().coins,coins+12)
+  store.getState().claimDaily();assert.equal(store.getState().coins,coins+12)
+})
+test('small record improvements retain their eventual ten-point coin reward', () => {
+  start();const max=pet();store.getState().select(max.id)
+  const finishAt=(seconds)=>{store.getState().startChallenge('buscar');now+=seconds*1000;for(let i=0;i<5;i++)store.getState().hitChallenge(i)}
+  const initial=store.getState().coins;finishAt(20);finishAt(15);finishAt(10)
+  assert.equal(store.getState().coins,initial+9)
+})
+
+test('wellbeing bonuses stop at the daily limit but reset on a new day', () => {
+  start();const s=store.getState(),{rollProgress}=require('../src/lib/studio/progression.ts')
+  store.setState({progression:{...rollProgress(s.progression),wellnessRewards:10},lastBonusAt:0,
+    pets:Object.fromEntries(Object.entries(s.pets).map(([id,rt])=>[id,{...rt,stats:{...rt.stats,felicidad:100}}]))})
+  const coins=store.getState().coins;store.getState().gameTick();assert.equal(store.getState().coins,coins)
+  now+=86400000;store.getState().gameTick();assert.equal(store.getState().coins,coins+2)
+  assert.equal(store.getState().progression.wellnessRewards,1)
+})
