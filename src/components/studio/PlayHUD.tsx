@@ -8,6 +8,8 @@
 // El juego ahora ocupa toda la pantalla; esto flota encima.
 
 import { useEffect, useRef, useState } from 'react'
+import { HeaderBar } from '@/components/studio/HeaderBar'
+import { LevelBar } from '@/components/studio/LevelBar'
 import { catalogById } from '@/lib/studio/catalog'
 import { PetIllustration } from '@/components/studio/PetIllustration'
 import { useStudio } from '@/lib/studio/store'
@@ -26,7 +28,10 @@ export function PlayHUD() {
   useEffect(() => {
     if (!expanded) return
     const closeOutside = (event: PointerEvent) => {
-      if (!toolsRef.current?.contains(event.target as Node)) setExpanded(false)
+      const target = event.target as Element
+      // Shop dialogs render in a portal; interacting with them must keep their owner mounted.
+      if (target.closest?.('[role="dialog"], [role="alertdialog"]')) return
+      if (!toolsRef.current?.contains(target)) setExpanded(false)
     }
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false) }
     document.addEventListener('pointerdown', closeOutside)
@@ -65,6 +70,7 @@ export function PlayHUD() {
         </button>
       </div>
       {expanded && <section id="emma-care-panel" className="emma-dock emma-control-panel" aria-label="Cuidado rápido de mascotas">
+      <div className="emma-game-settings"><HeaderBar /><LevelBar /></div>
           <button type="button" className="emma-dock-btn" aria-label="Abrir Aventuras y premios" onClick={()=>{setExpanded(false);window.dispatchEvent(new CustomEvent('emma-drawer-open',{detail:{section:'misiones'}}))}}>🎯</button>
       {/* mini selector de mascotas */}
       {pets.length === 0 ? (

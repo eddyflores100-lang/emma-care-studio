@@ -24,6 +24,7 @@ import {
   WorldObject,
 } from './types'
 import { voiceEngine } from './voice'
+import { enterLandscape } from './screen'
 import { petPersonality } from './personality'
 import { stepAround } from './navigation'
 import {
@@ -622,6 +623,8 @@ export const useStudio = create<StudioState>((set, get) => {
     },
 
     startPlay: () => {
+      // Request fullscreen in the original Play tap, before any async work.
+      if (typeof document !== 'undefined') void enterLandscape()
       const s = get()
       const now = Date.now()
       const pets: Record<string, PetRuntime> = {}
@@ -1830,6 +1833,10 @@ export const useStudio = create<StudioState>((set, get) => {
             rt.ty = Math.min(95, best.y + 5)
             rt.targetKind = 'random'
             rt.state = 'walk'
+          } else if (toy && rt.stats.energia > 35 && now - (rt.pairCd['autoPlay'] ?? 0) > 22000) {
+            rt.pairCd['autoPlay'] = now; rt.tx = toy.x; rt.ty = toy.y; rt.targetKind = 'random'
+            rt.obey = {cmd:'run', until:now + 4500}; rt.state = 'walk'
+            get().spawnParticles('🎾', obj.x, obj.y - 5, 1)
           } else {
             explore(rt, obj)
           }
@@ -1961,7 +1968,10 @@ export const useStudio = create<StudioState>((set, get) => {
           const key = `rival:${pred.id}:${prey.id}`
           if (now - (prt.pairCd[key] ?? 0) < 30000) continue
           const dist = Math.hypot(pred.x - prey.x, pred.y - prey.y)
-          if (dist > 11 || (prt.bonds[prey.id] ?? 0) >= 12 || (yrt.bonds[pred.id] ?? 0) >= 12) continue
+          if (dist > 18) continue
+          // Friendship spaces out rough play instead of disabling the pets' behaviour.
+          const bonded = (prt.bonds[prey.id] ?? 0) >= 12 || (yrt.bonds[pred.id] ?? 0) >= 12
+          if (bonded && now - (prt.pairCd[key] ?? 0) < 60000) continue
           // ¡EMPIEZA LA PERSECUCIÓN!
           prt.pairCd[key] = now
           prt.chaseRole = 'chase'

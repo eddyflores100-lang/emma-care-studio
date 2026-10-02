@@ -145,7 +145,7 @@ export function parseVoiceCommand(raw: string, pets: WorldObject[]): ParsedVoice
     const reserved = [...Object.values(WORDS).flat(), ...DESTS.flatMap(d => d.words), ...WORLDS.flatMap(d => d.words)].flatMap(w => w.split(' '))
     words = words.split(' ').map(token => !reserved.includes(token) && norm(p.name).length >= 3 && lev(token.replace(/ks$/, 'x'), norm(p.name)) <= 1 ? '' : token).join(' ')
   }
-  const commandText = words.replace(/\s+/g, ' ').trim()
+  const commandText = words.replace(/\b(oye|oigan|hey|eh)\b/g, '').replace(/\bpor (aqui|aca)\b/g, '$1').replace(/\s+/g, ' ').trim()
   {
     const known = [...Object.values(WORDS).flat(), ...DESTS.flatMap(d => d.words), ...WORLDS.flatMap(d => d.words),
       'todos', 'todas', 'mascotas', 'por', 'favor', 'a', 'al', 'ala', 'la', 'el', 'las', 'los', 'mi', 'tu', 'su', 'se', 'no', 'de', 'mis', 've', 'vete', 'ir', 'anda', 'vamos', 'y', 'trae', 'traeme', 'lleva']

@@ -96,9 +96,8 @@ export default function Home() {
   }, [mode])
 
   return (
-    <main className="flex h-[100dvh] flex-col overflow-hidden bg-[#FFF7ED]">
-      <HeaderBar />
-      <LevelBar />
+    <main className={`emma-app flex h-[100dvh] flex-col overflow-hidden bg-[#FFF7ED] ${mode === 'play' ? 'emma-immersive' : ''}`}>
+      {mode === 'edit' && <><HeaderBar /><LevelBar /></>}
       <IntroSplash />
 
       {mode === 'edit' ? (
@@ -126,7 +125,7 @@ export default function Home() {
       ) : (
         /* ===== JUGAR: el mundo llena TODO; dock flotante + mochila ===== */
         <div className="relative min-h-0 flex-1">
-          <div className="emma-play-canvas absolute inset-0 p-2">
+          <div className="emma-play-canvas absolute inset-0">
             <WorldCanvas />
           </div>
           <PlayHUD />

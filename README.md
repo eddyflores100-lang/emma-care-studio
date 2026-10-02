@@ -1,3 +1,9 @@
+## v0.13 — juego inmersivo y mascotas kawaii
+
+Jugar solicita pantalla completa desde el toque inicial cuando el navegador lo permite. El escenario llena toda la ventana sin marco ni barras reservadas; micrófono y Controles flotan en una esquina. Tienda, mapa de mundos, sonido, editar y pantalla completa están dentro de Controles.
+
+Mascotas con ojos grandes, mejillas rosadas y colores pastel; escenarios y objetos comparten la paleta. Las rivalidades siguen activas aunque aumente el vínculo, con más tiempo entre persecuciones para amigos. Mascotas sanas corren hacia los juguetes por iniciativa propia. Se mantienen órdenes individuales, quieto hasta libre, refugios, cansancio y reposo hospitalario. Llamadas naturales como «oye Max» y «Max ven por aquí» conservan la selección por nombre.
+
 # 🎮 Emma Care Studio
 
 **El estudio de juegos de mascotas para niñas y niños** — "Canva + LEGO + Roblox", pero simple: monta tu mundo, crea reglas mágicas y juega a cuidar a tus mascotas. Todo en español, todo en el navegador, todo gratis.

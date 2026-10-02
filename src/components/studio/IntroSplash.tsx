@@ -66,7 +66,7 @@ export function IntroSplash() {
         </div>
 
         <div className="mt-4 space-y-1.5 rounded-2xl bg-amber-50 p-3 text-sm font-bold text-slate-600">
-          <p>🗺️ 4 mundos: 🌳 Jardín · 🏠 Casa · 🏥 Hospital · 🏖️ Playa</p>
+          <p>🗺️ 8 mundos para explorar · 🐾 15 mascotas kawaii</p>
           <p>🔊 Cada animal hace SU sonido: ladra, maúlla, ruge… ¡15 mascotas!</p>
           <p>😈 ¡Rivalidades! El perro persigue al gato: la pantalla tiembla 📳</p>
           <p>🌿 Escondites y trepaderas para escapar · 🎾 pelota · 🪑 órdenes</p>
