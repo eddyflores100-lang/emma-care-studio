@@ -37,7 +37,7 @@ import {
   makeLevelStarters,
   uid,
 } from './catalog'
-import { petVoice, setMuted, sfx } from './sound'
+import { petVoice, petResponse, setMuted, sfx } from './sound'
 import { parseVoiceCommand, type VoiceOutcome } from './voice'
 
 import { SAVE_KEY, BACKUP_KEY, decodeProject, snapshotProject } from './persistence'
@@ -1101,7 +1101,7 @@ export const useStudio = create<StudioState>((set, get) => {
       const pets = Object.fromEntries(Object.entries(s.pets).map(([id, rt]) =>
         [id, { ...rt, stats: { ...rt.stats }, pairCd: { ...rt.pairCd } }]))
       const answer = (p: WorldObject, text: string) => {
-        speak(set, get, p, 'normal')
+        void petResponse(p.catalogId, kind)
         set({ say: { ...get().say, [p.id]: { text: `${VOICES[p.catalogId]?.normal ?? '🐾'} ${text}`, until: now + 4000 } } })
       }
       // Stop both sides directly. Marking chaseUntil=now incorrectly ran
@@ -1182,6 +1182,7 @@ export const useStudio = create<StudioState>((set, get) => {
         const chosen = named[0]
         if (chosen && (chosen.level !== s.currentLevel || pets[chosen.id]?.injured || pets[chosen.id]?.hospitalStatus === 'waiting' || pets[chosen.id]?.hospitalStatus === 'treating')) { answer(chosen,'Necesito estar aquí y sano para traer la pelota 🩹'); return 'ok' }
         if (chosen && pets[chosen.id]) { cancelChase(chosen.id); pets[chosen.id].obey=null; pets[chosen.id].inside=null; pets[chosen.id].state='idle'; pets[chosen.id].goTo=null }
+        for (const p of targets) answer(p, '¡Listo para traer la pelota! 🎾')
         set({ pets, actionCd, ballPending: true,ballPetId:chosen?.id ?? null }); toast('🎾 Toca el mundo para lanzar la pelota')
         return 'ok'
       }

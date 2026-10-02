@@ -439,3 +439,67 @@ test('a new project resets its care mission counters', () => {
   store.getState().newProject()
   assert.deepEqual(store.getState().careMissions,{alimentar:0,acariciar:0,banar:0})
 })
+
+test('named commands reject unknown words and negated movement', () => {
+  const pets = [{id:'max',name:'Max',catalogId:'dog'}, {id:'misi',name:'Misi',catalogId:'cat'}]
+  for (const phrase of ['Max compra zapatos', 'Max no vayas a casa', 'Max ven Misi corre', 'Max a casa y a playa', 'Max a la cama y a comer', 'Max ven y ve a casa', 'Max a casa y a casita']) {
+    assert.equal(parseVoiceCommand(phrase,pets), null, phrase)
+  }
+  assert.equal(parseVoiceCommand('Max ve a la casa por favor',pets).kind,'travel')
+  assert.equal(parseVoiceCommand('Maks ven aquí',pets).named[0].id,'max')
+  assert.equal(parseVoiceCommand('gato maúlla',pets).kind,'greet')
+})
+
+test('landscape lock is restored on fullscreen and visible return', async () => {
+  const { maintainLandscape } = require('../src/lib/studio/screen.ts')
+  const listeners = {}; let locks=0
+  const doc = {visibilityState:'visible',fullscreenElement:{},addEventListener:(k,f)=>listeners[k]=f,removeEventListener:k=>delete listeners[k]}
+  const cleanup=maintainLandscape(doc,{lock:async mode=>{assert.equal(mode,'landscape');locks++}})
+  await Promise.resolve(); assert.equal(locks,1)
+  doc.visibilityState='hidden'; listeners.visibilitychange(); assert.equal(locks,1)
+  doc.visibilityState='visible'; listeners.visibilitychange(); await Promise.resolve(); assert.equal(locks,2)
+  listeners.fullscreenchange(); await Promise.resolve(); assert.equal(locks,3)
+  cleanup(); assert.deepEqual(listeners,{})
+})
+
+test('voice return creates a fresh recognizer and ignores stale results', () => {
+  const { attachVoiceLifecycle } = require('../src/lib/studio/voice.ts')
+  const recognizers=[]; let calls=0
+  window.SpeechRecognition=class {constructor(){recognizers.push(this)}start(){}stop(){}}
+  const listeners={}; const doc={visibilityState:'visible',addEventListener:(k,f)=>listeners[k]=f,removeEventListener:k=>delete listeners[k]}
+  const cleanup=attachVoiceLifecycle(doc)
+  voiceEngine.setHandler(()=>{calls++;return 'ok'});voiceEngine.start()
+  const old=recognizers.at(-1)
+  doc.visibilityState='hidden';listeners.visibilitychange();assert.equal(voiceEngine.getSnapshot().listening,false)
+  doc.visibilityState='visible';listeners.visibilitychange();const fresh=recognizers.at(-1)
+  assert.notEqual(old,fresh)
+  const event={resultIndex:0,results:[{isFinal:true,length:1,0:{transcript:'Max ven'}}]}
+  old.onresult(event);assert.equal(calls,0)
+  fresh.onresult(event);fresh.onresult(event);assert.equal(calls,1)
+  cleanup();delete window.SpeechRecognition
+})
+
+test('pet answers wait for resumed audio and produce species sounds plus acknowledgement', async () => {
+  const { petResponse, setMuted }=require('../src/lib/studio/sound.ts')
+  let context,resolveResume;const started=[]
+  const param={setValueAtTime(){},exponentialRampToValueAtTime(){},linearRampToValueAtTime(){}}
+  window.AudioContext=class {
+    constructor(){context=this;this.state='suspended';this.currentTime=0;this.destination={}}
+    resume(){return new Promise(resolve=>resolveResume=()=>{this.state='running';resolve()})}
+    createOscillator(){return {frequency:param,connect(){},start:t=>started.push(t),stop(){}}}
+    createGain(){return {gain:param,connect(){}}}
+  }
+  setMuted(false);const reply=petResponse('cat','calm')
+  assert.deepEqual(started,[]);resolveResume();await reply
+  assert.ok(started.length>=4);assert.ok(started.some(t=>t>=1.1))
+  setMuted(true);const count=started.length;await petResponse('cat','greet');assert.equal(started.length,count)
+  setMuted(false);context.state='closed';delete window.AudioContext
+})
+
+
+test('landscape recovery tolerates browsers without orientation API', () => {
+  const {maintainLandscape}=require('../src/lib/studio/screen.ts')
+  const doc={visibilityState:'visible',fullscreenElement:{},addEventListener(){},removeEventListener(){}}
+  const previous=global.screen;global.screen={}
+  try {assert.doesNotThrow(()=>maintainLandscape(doc)())} finally {global.screen=previous}
+})

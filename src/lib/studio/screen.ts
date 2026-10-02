@@ -30,3 +30,32 @@ export function keepScreenAwake(nav: ScreenNavigator = navigator, doc: ScreenDoc
   doc.addEventListener('visibilitychange', onVisibility)
   return () => { active = false; doc.removeEventListener('visibilitychange', onVisibility); release() }
 }
+
+
+interface LandscapeDocument extends ScreenDocument { fullscreenElement: unknown }
+interface LandscapeOrientation { lock?: (mode: 'landscape') => Promise<void> }
+
+/** Mobile browsers can drop their orientation lock when the tab is hidden. */
+export function maintainLandscape(
+  doc: LandscapeDocument = document,
+  orientation: LandscapeOrientation = screen.orientation as LandscapeOrientation,
+) {
+  const restore = () => {
+    if (doc.visibilityState === 'visible' && doc.fullscreenElement) {
+      void orientation?.lock?.('landscape').catch(() => {})
+    }
+  }
+  restore()
+  for (const event of ['visibilitychange', 'fullscreenchange']) doc.addEventListener(event, restore)
+  return () => { for (const event of ['visibilitychange', 'fullscreenchange']) doc.removeEventListener(event, restore) }
+}
+
+/** Fullscreen requires a fresh tap after the browser or OS closes it. */
+export async function enterLandscape() {
+  try {
+    if (!document.fullscreenElement && document.fullscreenEnabled) {
+      await document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    }
+    await (screen.orientation as LandscapeOrientation)?.lock?.('landscape')
+  } catch { /* The portrait recovery panel also explains manual rotation. */ }
+}
