@@ -79,8 +79,8 @@ export function VoiceControls() {
         </DialogContent>
       </Dialog>
       {/* lo que oye, en una pastillita discreta abajo (sin estorbar) */}
-      {listening && (
-        <div className="emma-voice-cap" role="status" aria-live="polite">
+      {listening && heard && (
+        <div key={`${heard}:${lastVoice?.at ?? 0}`} className="emma-voice-cap" role="status" aria-live="polite">
           <span className="emma-order-chip" data-kind={lastVoice?.kind ?? 'listen'}>{lastVoice?.label ?? '🎙️ escuchando…'}</span>
           <span className="emma-voice-heard">«{heard || 'Max ven · gato hola · Max a la casa'}»</span>
         </div>
