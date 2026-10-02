@@ -139,64 +139,11 @@ body {
   padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
 }
 
-/* césped del mundo (Jardín) */
-.grass {
-  background-color: #a7f3d0;
-  background-image:
-    radial-gradient(circle at 25% 25%, rgba(52, 211, 153, 0.5) 12%, transparent 13%),
-    radial-gradient(circle at 75% 75%, rgba(52, 211, 153, 0.5) 12%, transparent 13%);
-  background-size: 34px 34px;
-}
-
-/* suelo de madera (mundo Casa) */
-.floor-casa {
-  background-color: #fcd9a0;
-  background-image:
-    repeating-linear-gradient(0deg, rgba(146, 94, 48, 0.22) 0 2px, transparent 2px 36px),
-    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.3) 7%, transparent 8%);
-  background-size:
-    auto,
-    130px 130px;
-}
-.floor-casa::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 17%;
-  background: #fef3c7;
-  border-bottom: 4px solid rgba(180, 120, 60, 0.25);
-}
-
-/* suelo de clínica (mundo Hospital): cuadros menta */
-.floor-hospital {
-  background-color: #effcf9;
-  background-image:
-    linear-gradient(45deg, rgba(153, 246, 228, 0.55) 25%, transparent 25%, transparent 75%, rgba(153, 246, 228, 0.55) 75%),
-    linear-gradient(45deg, rgba(153, 246, 228, 0.55) 25%, transparent 25%, transparent 75%, rgba(153, 246, 228, 0.55) 75%);
-  background-size: 46px 46px;
-  background-position:
-    0 0,
-    23px 23px;
-}
-.floor-hospital::before {
-  content: '';
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 17%;
-  background: #f0fdfa;
-  border-bottom: 4px solid rgba(20, 184, 166, 0.3);
-}
-
-/* playa: franja de mar arriba + arena con puntitos */
-.floor-playa {
-  background-color: #fef3c7;
-  background-image:
-    linear-gradient(to bottom, #cffafe 0 17%, #99f6e4 17% 21%, transparent 21%),
-    radial-gradient(circle at 25% 55%, rgba(217, 119, 6, 0.16) 9%, transparent 10%);
-  background-size:
-    auto,
-    64px 64px;
-}
+/* Scene artwork supplies texture; these colors also provide a loading fallback. */
+.grass { background: #b8dfa3; }
+.floor-casa { background: #e9c69e; }
+.floor-hospital { background: #d6e9e1; }
+.floor-playa { background: #f7e3b9; }
 
 /* globo de voz (¡Guau!, ¡Miau...) */
 @keyframes emma-say {
@@ -978,3 +925,46 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .pet-dance, .pet-hop, .canvas-shake { animation: none; }
 }
+
+
+/* Illustrated worlds and pets share warm outlines and soft, grounded shadows. */
+.world-canvas { isolation: isolate; box-shadow: 0 8px 24px #806b4d1c, inset 0 0 0 1px #fff9; }
+.world-backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; animation: scene-arrive .35s ease-out; }
+.world-art { width: 100%; height: 100%; display: block; transition: filter .8s ease; }
+.scene-light { position: absolute; inset: 0; background: linear-gradient(135deg, #fff8e426, transparent 55%, #716d4110); }
+.world-rainy .world-art { filter: saturate(.65) brightness(.86); }
+.world-rainy .scene-light { background: #657a901c; }
+.scene-cloud { animation: scene-drift 24s ease-in-out infinite alternate; }
+.scene-wave { animation: scene-tide 5s ease-in-out infinite alternate; }
+.world-contact-shadow { background: #635e4d26; filter: blur(1px); z-index: -1; }
+.world-sprite { filter: drop-shadow(0 2px 1px #655c4e14); transform-origin: 50% 85%; }
+.pet-illustration { display: block; width: 1.65em; height: 1.78em; overflow: visible; }
+.world-object-play { transition: left 70ms linear, top 70ms linear; }
+.world-name { color: #68594b; background: #fffaf0e8; border: 1px solid #c6ad8f66; box-shadow: 0 2px 3px #77624712; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.world-name-selected { color: #9c4f5a; border-color: #d896a0; background: #fff1ee; }
+.pet-walk { animation: pet-step var(--stride, .5s) ease-in-out infinite; }
+.pet-breathe { animation: pet-breath 3.4s ease-in-out infinite; }
+.pet-idle { animation: pet-breath 4.8s ease-in-out infinite; }
+.pet-nibble { animation: pet-nibble .55s ease-in-out infinite; }
+.pet-respond { animation: pet-hello .65s ease-in-out 2; }
+.pet-eyes { transform-box: fill-box; transform-origin: center; animation: pet-blink 6.3s ease-in-out infinite; }
+.world-object:nth-child(3n) .pet-eyes { animation-delay: -2.1s; }
+.world-object:nth-child(2n) .pet-idle { animation-delay: -1.4s; }
+@keyframes scene-arrive { from { opacity: .55; } to { opacity: 1; } }
+@keyframes scene-drift { from { transform: translateX(-8px); } to { transform: translateX(22px); } }
+@keyframes scene-tide { from { transform: translate(-6px, -2px); opacity: .65; } to { transform: translate(6px, 3px); opacity: 1; } }
+@keyframes pet-step { 0%,100% { transform: scaleX(var(--face, 1)) rotate(-3deg); } 50% { transform: scaleX(var(--face, 1)) translateY(-3px) rotate(3deg); } }
+@keyframes pet-breath { 0%,100% { transform: scaleX(var(--face, 1)) scaleY(1); } 50% { transform: scaleX(var(--face, 1)) scaleY(1.025); } }
+@keyframes pet-nibble { 0%,100% { transform: scaleX(var(--face, 1)) rotate(2deg); } 50% { transform: scaleX(var(--face, 1)) rotate(-3deg) translateY(2px); } }
+@keyframes pet-hello { 0%,100% { transform: scaleX(var(--face, 1)); } 35% { transform: scaleX(var(--face, 1)) rotate(-7deg) translateY(-5px); } 70% { transform: scaleX(var(--face, 1)) rotate(5deg); } }
+@keyframes pet-blink { 0%,44%,48%,100% { transform: scaleY(1); } 46% { transform: scaleY(.12); } }
+/* Recovery must remain usable after the five-second hint animation. */
+.emma-rotate { animation: none; white-space: normal; width: min(310px, 90vw); transform: translateX(-50%); border-radius: 18px; text-align: center; }
+@media (prefers-reduced-motion: reduce) {
+  .pet-limp, .say-pop, .particle, .world-backdrop, .scene-cloud, .scene-wave, .pet-walk, .pet-breathe, .pet-idle, .pet-nibble, .pet-respond, .pet-eyes,
+  .rain-drop, .butterfly, .ball-drop, .gift-pop, .emma-mic-live, .emma-tab, .emma-house-badge,
+  .world-canvas .animate-bounce, .world-canvas .animate-pulse { animation: none !important; }
+  .world-object-play, .world-art { transition: none; }
+}
+
+.object-illustration { display: block; width: 1.35em; height: 1.46em; overflow: visible; }

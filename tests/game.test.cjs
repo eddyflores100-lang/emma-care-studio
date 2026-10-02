@@ -503,3 +503,16 @@ test('landscape recovery tolerates browsers without orientation API', () => {
   const previous=global.screen;global.screen={}
   try {assert.doesNotThrow(()=>maintainLandscape(doc)())} finally {global.screen=previous}
 })
+
+test('indoor worlds protect pets from rain without requiring a second shelter', () => {
+  for (const level of ['casa','hospital']) {
+    start(); const max=pet(); const s=store.getState()
+    store.setState({currentLevel:level, objects:s.objects.map(o=>o.id===max.id?{...o,level,x:90,y:90}:o),
+      event:null,nextEventAt:now+999999,
+      pets:{...s.pets,[max.id]:{...s.pets[max.id],state:'idle',stats:{comida:70,descanso:70,energia:70,higiene:70,felicidad:70}}}})
+    const before=structuredClone(Object.fromEntries(Object.entries(store.getState()).filter(([,v])=>typeof v!=='function')))
+    store.getState().gameTick();const dry={...store.getState().pets[max.id].stats}
+    store.setState({...before,event:{kind:'lluvia',until:now+20000}})
+    store.getState().gameTick();assert.deepEqual(store.getState().pets[max.id].stats,dry,level)
+  }
+})

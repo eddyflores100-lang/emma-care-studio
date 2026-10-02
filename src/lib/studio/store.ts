@@ -1326,7 +1326,7 @@ export const useStudio = create<StudioState>((set, get) => {
       const toy = findSpecial(levelObjs, 'toy')
       const bath = findSpecial(levelObjs, 'bath')
       const water = findSpecial(levelObjs, 'water')
-      const raining = s.event?.kind === 'lluvia' && s.event.until > now
+      const raining = s.event?.kind === 'lluvia' && s.event.until > now && (s.currentLevel === 'jardin' || s.currentLevel === 'playa')
       const shelters = raining
         ? levelObjs.filter((o) => catalogById[o.catalogId]?.shelter)
         : []
@@ -2006,7 +2006,7 @@ export const useStudio = create<StudioState>((set, get) => {
         if (kind === 'lluvia' || kind === 'regalo') vib(60)
       }
 
-      const raining = event?.kind === 'lluvia'
+      const raining = event?.kind === 'lluvia' && (s.currentLevel === 'jardin' || s.currentLevel === 'playa')
       const hungryDays = event?.kind === 'escasez'
       const butterfly = event?.kind === 'mariposa'
       const shelters = s.objects.filter(
