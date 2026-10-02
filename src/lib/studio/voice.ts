@@ -84,6 +84,7 @@ const DESTS: { dest: VoiceDest; words: string[] }[] = [
   { dest: 'bano', words: ['banate', 'banarse', 'bano', 'banera', 'lavate'] },
 ]
 const WORLDS: { level: import('./types').LevelId; words: string[] }[] = [
+  {level:'parque',words:['parque']}, {level:'bosque',words:['bosque']}, {level:'granja',words:['granja']}, {level:'montana',words:['montana']},
   { level: 'casa', words: ['casa', 'hogar'] },
   { level: 'jardin', words: ['jardin', 'patio', 'afuera'] },
   { level: 'playa', words: ['playa', 'mar'] },

@@ -91,6 +91,10 @@ export const LEVELS: LevelDef[] = [
     cost: 200,
     bg: 'floor-playa',
   },
+  {id:'parque',name:'Parque',emoji:'🎡',desc:'Búsquedas y circuitos · requiere 2 misiones cobradas',cost:100,bg:'grass'},
+  {id:'bosque',name:'Bosque',emoji:'🌲',desc:'Huellas y exploración · requiere 5 misiones cobradas',cost:180,bg:'grass'},
+  {id:'granja',name:'Granja',emoji:'🌾',desc:'Alimentos y cooperación · requiere 8 misiones cobradas',cost:240,bg:'grass'},
+  {id:'montana',name:'Montaña',emoji:'🏔️',desc:'Recorridos y paciencia · requiere 12 misiones cobradas',cost:320,bg:'grass'},
 ]
 
 export const levelById: Record<LevelId, LevelDef> = Object.fromEntries(
@@ -403,6 +407,12 @@ export function makeLevelStarters(level: LevelId): WorldObject[] {
         mk('tent', 'Tienda', 55, 30, 1.3, 0, undefined, 'playa'),
         mk('shell', 'Concha', 70, 82, 0.8, 0, undefined, 'playa'),
       ]
+    case 'parque': case 'bosque': case 'granja': case 'montana':
+      return [mk('bowl','Comedero',40,78,1,0,undefined,level),mk('water','Agua',57,83,1,0,undefined,level),
+        mk('bed','Descanso',20,80,1.1,0,undefined,level),mk('house','Refugio',80,32,1.5,0,undefined,level),
+        mk(level==='bosque'?'pine':'tree','Árbol',12,30,1.5,0,undefined,level),mk('toy','Juguete',65,65,1,0,undefined,level),
+        mk(level==='parque'?'rabbit':level==='bosque'?'fox':level==='granja'?'chicken':'turtle',
+          level==='parque'?'Nube':level==='bosque'?'Ámbar':level==='granja'?'Pepita':'Musgo',50,55,1,0,8,level)]
     case 'jardin':
     default:
       return []

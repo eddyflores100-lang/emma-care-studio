@@ -176,3 +176,20 @@ Las animaciones respetan la preferencia del dispositivo de reducir movimiento. E
 La barra inferior reserva su propio espacio fuera del lienzo: 50 px, o 46 px en móviles horizontales, más el área segura del sistema. Solo muestra la mascota seleccionada, micrófono, entrada escrita y **Controles**. El selector de animales, cuidados, mapa y mochila aparecen al abrir el panel, con desplazamiento propio. Se cierra al tocar el mundo, pulsar Escape, lanzar la pelota o abrir mapa/mochila. La escucha sigue activa mientras el panel está cerrado. Las transcripciones aparecen brevemente y no capturan toques.
 
 Validación: 62 pruebas del motor, TypeScript, ESLint y exportación estática.
+
+
+## v0.12 — aventuras, economía y premios
+
+- Ocho mundos: Jardín, Casa, Hospital, Playa, Parque, Bosque, Granja y Montaña. Los cuatro nuevos exigen monedas y 2/5/8/12 misiones cobradas; cada uno añade un residente con runtime listo y suministros de cuidado.
+- 24 misiones con progreso persistente y premios que se cobran una sola vez. Cada mundo tiene cuidados, búsqueda de cinco objetos y recorrido de cinco puntos en orden.
+- Desafíos sobre el lienzo, temporizador, errores de orden y cancelación. Las habilidades de las 15 especies aportan pistas o tiempo. Se necesita una mascota sana, despierta y con energía, salvo en ayuda hospitalaria.
+- Armario con pañuelo, corona, sombrero y estrellas. Los accesorios se desbloquean con misiones y se aplican a las mascotas; no hay compras con dinero real.
+- Premio diario al cuidar tres mascotas distintas. Las caricias con el dedo también cuentan. Los primeros 30 cuidados entregan monedas base, y el bonus de bienestar se limita a diez al día; se puede seguir cuidando después.
+- Ayuda diaria de 20 monedas para saldos inferiores a 15. Si ya se usó, un paciente hospitalizado en espera puede preparar suministros que pagan el tratamiento directamente, sin entregar saldo libre.
+- Récords por desafío, puntos semanales solo por mejorar el récord de esa semana, monedas por cada nuevo tramo de diez puntos y hasta doce temporadas guardadas. Las misiones y el premio diario aportan puntos; las compras no.
+- Ranking **local de temporadas del mismo cuidador**, con apodo. No hay jugadores ficticios ni clasificación online. GitHub Pages es estático: el ranking público sigue pendiente de un servidor con identidad y validación de resultados; no se confía en puntos enviados por el navegador.
+- Guardado v3 ampliado de forma compatible; los archivos antiguos reciben progresión vacía. Misiones, armario, premios diarios y récords se exportan/importan. Un desafío en curso no se reanuda al importar.
+
+Uso: pulsa Jugar, selecciona una mascota y abre **Controles → 🎯 Aventuras**. Inicia una búsqueda o recorrido; al completarlo vuelve a Aventuras y cobra la misión. Para viajar por voz puedes decir «Nube al bosque», «al parque», «a la granja» o «a la montaña», una vez desbloqueados.
+
+Verificación: 76 pruebas del motor, TypeScript, ESLint y exportación estática. Las pruebas cubren a progresión, premios repetidos, temporizador, orden, ayuda hospitalaria, guardado, cambio semanal, desbloqueos y límites de premios. Las habilidades se agrupan en pistas o tiempo adicional; todavía no hay física de trepar/saltar exclusiva por especie, tienda de pago, temporadas online ni monetización real. Las reglas económicas necesitan ajuste tras partidas en dispositivos reales.

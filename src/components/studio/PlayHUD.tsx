@@ -65,6 +65,7 @@ export function PlayHUD() {
         </button>
       </div>
       {expanded && <section id="emma-care-panel" className="emma-dock emma-control-panel" aria-label="Cuidado rápido de mascotas">
+          <button type="button" className="emma-dock-btn" aria-label="Abrir Aventuras y premios" onClick={()=>{setExpanded(false);window.dispatchEvent(new CustomEvent('emma-drawer-open',{detail:{section:'misiones'}}))}}>🎯</button>
       {/* mini selector de mascotas */}
       {pets.length === 0 ? (
         <button

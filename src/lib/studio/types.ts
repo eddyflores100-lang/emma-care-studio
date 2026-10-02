@@ -8,7 +8,7 @@ export type ObjKind = 'pet' | 'home' | 'nature'
 export type SpecialKind = 'food' | 'bed' | 'toy' | 'bath' | 'water'
 
 /** Mundos/niveles del juego (se desbloquean con monedas) */
-export type LevelId = 'jardin' | 'casa' | 'hospital' | 'playa'
+export type LevelId = 'jardin' | 'casa' | 'hospital' | 'playa' | 'parque' | 'bosque' | 'granja' | 'montana'
 
 /** Ánimo de la mascota: decide su voz y su cara */
 export type Mood =
@@ -184,6 +184,7 @@ export interface SavedProject {
   unlockedLevels?: LevelId[]
   currentLevel?: LevelId
   pets?: Record<string, SavedPet>
+  progression?: import('./progression').Progression
   careMissions?: Record<'alimentar' | 'acariciar' | 'banar',number>
 }
 

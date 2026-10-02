@@ -1,3 +1,4 @@
+import { memo } from 'react'
 /** One illustrated family of pets: stable artwork across Android, iOS and desktop. */
 const PALETTES: Record<string, [string, string]> = {
   dog:['#d5a476','#8f654f'], cat:['#ebbc81','#bf8d5c'], rabbit:['#f6e7db','#e9b7b0'],
@@ -6,7 +7,7 @@ const PALETTES: Record<string, [string, string]> = {
   bear:['#b88f72','#8b654f'], panda:['#f7f0df','#647675'], lion:['#e4be79','#bc8754'],
   pig:['#e7aaa4','#bd817e'], monkey:['#b18d70','#86644f'], turtle:['#a6be83','#77946d'],
 }
-export function PetIllustration({ species, sleeping = false, happy = false }: {species: string; sleeping?: boolean; happy?: boolean}) {
+export const PetIllustration = memo(function PetIllustration({ species, sleeping = false, happy = false }: {species: string; sleeping?: boolean; happy?: boolean}) {
   const [fur, accent] = PALETTES[species] ?? PALETTES.dog
   const bird = ['bird','chicken','duck'].includes(species)
   const roundEars = ['mouse','hamster','bear','panda','pig','monkey'].includes(species)
@@ -56,4 +57,4 @@ export function PetIllustration({ species, sleeping = false, happy = false }: {s
       {['cat','mouse','rabbit','hamster'].includes(species) && <path d="M24 54l-10-2M24 59l-10 2M76 54l10-2M76 59l10 2" fill="none" strokeWidth="1.5" />}
     </g>
   </svg>
-}
+})

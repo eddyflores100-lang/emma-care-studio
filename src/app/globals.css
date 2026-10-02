@@ -990,3 +990,15 @@ body {
 
 .emma-play-tools .emma-voice-cap { animation: emma-feedback-hide 4s linear forwards; }
 @keyframes emma-feedback-hide { 0%,85% { opacity: 1; visibility: visible; } 100% { opacity: 0; visibility: hidden; } }
+
+.adventure-button { margin-top: 5px; padding: 8px 10px; min-height: 40px; border: 1px solid #cbb294; border-radius: 10px; background: #fff4de; font-weight: 800; }
+.adventure-button:disabled { opacity: .45; }
+.adventure-button[aria-pressed="true"] { background: #d4ead7; border-color: #8daf93; }
+.challenge-target { position: absolute; z-index: 65; transform: translate(-50%,-50%); width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: #fff8e9ed; border: 2px solid #b99d68; box-shadow: 0 3px 8px #68594b33; font-size: 22px; font-weight: 900; touch-action: manipulation; }
+.challenge-hint { outline: 3px dashed #64a67b; outline-offset: 3px; }
+.challenge-status { position: absolute; left: 50%; top: 8px; transform: translateX(-50%); z-index: 85; max-width: calc(100% - 20px); display:flex; align-items:center; gap:8px; padding: 5px 10px; border-radius: 15px; background:#fffaf0f5; border:1px solid #cbb294; font-size:12px; font-weight:800; }
+.challenge-status button { min-height: 32px; min-width: 32px; }
+.pet-prize { pointer-events:none; position:absolute; left:50%; top:-10px; transform:translateX(-50%); font-size:18px; }
+.scene-location { position:absolute; left:12px; top:12px; padding:5px 9px; border-radius:10px; background:#fff9; color:#526450; font-size:11px; font-weight:800; }
+.adventure-panel { font-size: 13px; line-height: 1.5; }
+.adventure-panel progress { accent-color: #6b9d79; }

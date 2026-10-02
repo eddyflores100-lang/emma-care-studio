@@ -54,7 +54,7 @@ export default function Home() {
         s.hydrated && (s.objects !== prev.objects ||
         s.pets !== prev.pets ||
         s.rules !== prev.rules ||
-        s.coins !== prev.coins ||
+        s.coins !== prev.coins || s.progression !== prev.progression ||
         s.currentLevel !== prev.currentLevel ||
         s.unlockedLevels !== prev.unlockedLevels)
       if (!dirty) return

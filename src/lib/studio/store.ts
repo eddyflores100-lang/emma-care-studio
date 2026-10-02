@@ -1,3 +1,4 @@
+import { freshProgression, rollProgress, recordProgress, claimQuest, newChallenge, challengeScore, UNLOCK_REQUIREMENTS, dayKey, type Progression, type Challenge, type ChallengeKind, type Accessory } from './progression'
 // Emma Care Studio — store principal (zustand)
 // Incluye: estado del editor, mundos/niveles con desbloqueo, reglas mágicas,
 // motor de juego (IA de mascotas, necesidades, monedas, partículas, VOCES)
@@ -163,7 +164,7 @@ function projectState(data: SavedProject): Partial<StudioState> {
     rt.tx = obj.x; rt.ty = obj.y
     pets[obj.id] = rt
   }
-  return { careMissions:data.careMissions ?? {alimentar:0,acariciar:0,banar:0}, objects: data.objects, rules: data.rules, coins: data.coins, pets,
+  return { progression:data.progression ?? freshProgression(), challenge:null, careMissions:data.careMissions ?? {alimentar:0,acariciar:0,banar:0}, objects: data.objects, rules: data.rules, coins: data.coins, pets,
     unlockedLevels: data.unlockedLevels ?? ['jardin'], currentLevel: data.currentLevel ?? 'jardin' }
 }
 
@@ -283,6 +284,15 @@ interface StudioState {
   /** pestaña activa del editor en móvil (pantallas < lg) */
   mobileTab: MobileTab
   coins: number
+  progression: Progression
+  challenge: Challenge | null
+  startChallenge: (kind: ChallengeKind) => void
+  hitChallenge: (id: number) => void
+  cancelChallenge: () => void
+  claimMission: (id: string) => void
+  claimDaily: () => void
+  equipPrize: (prize: Accessory | null) => void
+  setNickname: (name: string) => void
   careMissions: Record<'alimentar' | 'acariciar' | 'banar',number>
   muted: boolean
   /** mundo actual y mundos desbloqueados */
@@ -405,6 +415,7 @@ export const useStudio = create<StudioState>((set, get) => {
     selectedId: null,
     mobileTab: 'objetos',
     coins: 0,
+    progression:freshProgression(), challenge:null,
     careMissions:{alimentar:0,acariciar:0,banar:0},
     muted: false,
     currentLevel: 'jardin',
@@ -520,6 +531,58 @@ export const useStudio = create<StudioState>((set, get) => {
     },
 
     setMobileTab: (tab) => set({ mobileTab: tab }),
+    claimMission: (id) => {
+      const s=get(); if(s.mode!=='play')return
+      const reward=claimQuest(s.progression,id);if(!reward)return
+      set({progression:reward.progress,coins:s.coins+reward.coins});sfx.coin();get().saveSilent()
+      toast(`🏅 Premio: +${reward.coins} monedas y puntos semanales`)
+    },
+    claimDaily: () => {
+      const s=get();if(s.mode!=='play')return
+      const p=rollProgress(s.progression)
+      if(p.dailyClaimed || p.dailyPets.length<3)return
+      set({coins:s.coins+12,progression:{...p,dailyClaimed:true,weekPoints:p.weekPoints+20}});sfx.coin();get().saveSilent()
+    },
+    equipPrize: (prize) => {const s=get();if(prize&&!s.progression.accessories.includes(prize))return;set({progression:{...s.progression,equipped:prize}})},
+    setNickname: (name) => {const nickname=name.trim().slice(0,20);if(nickname)set({progression:{...get().progression,nickname}})},
+    cancelChallenge: () => set({challenge:null}),
+    startChallenge: (kind) => {
+      const s=get();if(s.mode!=='play'||s.challenge)return
+      const pet=s.objects.find(o=>o.id===s.selectedId&&isPetObj(o)&&o.level===s.currentLevel)
+      if(!pet){toast('👆 Selecciona una mascota de este mundo');return}
+      const rt=s.pets[pet.id];if(!rt)return
+      if(kind==='ayuda'){
+        if(s.coins>=15){toast('La ayuda está disponible cuando tienes menos de 15 monedas');return}
+        if(s.progression.aidDay===dayKey() && !(pet.level==='hospital'&&rt.hospitalStatus==='waiting')){toast('Ya recibiste la ayuda de hoy. Un paciente en espera aún puede recibir suministros para su tratamiento');return}
+      }else if(rt.injured||rt.sick||rt.inside||rt.state==='sleep'||rt.state==='rest'||rt.stats.energia<30){toast('🐾 Elige una mascota sana, despierta y con energía');return}
+      set({challenge:newChallenge(kind,s.currentLevel,pet.id,pet.catalogId),ball:null,ballPending:false,ballPetId:null});sfx.pop()
+    },
+    hitChallenge: (id) => {
+      const s=get(), round=s.challenge;if(s.mode!=='play'||!round)return
+      if(s.currentLevel!==round.level||Date.now()>round.deadline){set({challenge:null});toast('⏱️ Se acabó el tiempo. Puedes intentarlo de nuevo');return}
+      const runner=s.objects.find(o=>o.id===round.petId&&o.level===round.level)
+      if(!runner || (round.kind!=='ayuda' && (s.pets[round.petId]?.sick || s.pets[round.petId]?.injured))){set({challenge:null});toast('🐾 Tu mascota necesita volver o descansar');return}
+      const target=round.targets.find(t=>t.id===id);if(!target||target.found)return
+      if(round.kind==='circuito'&&id!==round.targets.find(t=>!t.found)?.id){set({challenge:{...round,mistakes:round.mistakes+1}});sfx.sad();return}
+      const targets=round.targets.map(t=>t.id===id?{...t,found:true}:t)
+      if(!targets.every(t=>t.found)){set({challenge:{...round,targets}});sfx.pop();return}
+      let progression=rollProgress(s.progression),coins=s.coins,donatedTreatment=false
+      if(round.kind==='ayuda'){
+        if(coins<15&&progression.aidDay!==dayKey()){coins+=20;progression={...progression,aidDay:dayKey()};toast('🤝 Ayuda completada: +20 monedas')}
+        else if(coins<15 && runner.level==='hospital' && s.pets[round.petId]?.hospitalStatus==='waiting'){coins=15;donatedTreatment=true}
+      }else{
+        progression=recordProgress(progression,`${round.kind}:${round.level}`)
+        const score=challengeScore(round),key=`${round.level}:${round.kind}`,old=progression.weekBest[key]??0
+        coins+=Math.floor(Math.max(old,score)/10)-Math.floor(old/10)
+        progression={...progression,best:{...progression.best,[key]:Math.max(progression.best[key]??0,score)},weekBest:{...progression.weekBest,[key]:Math.max(old,score)},weekPoints:progression.weekPoints+Math.max(0,score-old)}
+        toast(`🏆 ${score} puntos · Cobra tu misión en Aventuras`)
+      }
+      const rt=s.pets[round.petId],pets={...s.pets}
+      if(rt&&round.kind!=='ayuda')pets[round.petId]={...rt,stats:{...rt.stats,energia:Math.max(0,rt.stats.energia-8),felicidad:Math.min(100,rt.stats.felicidad+8)}}
+      set({challenge:null,progression,coins,pets});sfx.happy()
+      if(donatedTreatment){const selected=get().selectedId;get().select(round.petId);get().playerAction('curar');get().select(selected);toast('🤝 Los suministros financian el tratamiento de tu paciente')}
+      get().saveSilent()
+    },
 
     setLevel: (id) => {
       const s = get()
@@ -527,18 +590,23 @@ export const useStudio = create<StudioState>((set, get) => {
       if (!def) return
       if (s.unlockedLevels.includes(id)) {
         if (s.currentLevel === id) return
-        set({ currentLevel: id, selectedId: null, say: {}, housePanel: null })
+        set({ currentLevel: id, selectedId: null, say: {}, housePanel: null, challenge:null })
         sfx.pop()
         toast(`${def.emoji} ¡Bienvenido/a a ${def.name}!`)
         return
       }
+      const required = UNLOCK_REQUIREMENTS[id] ?? 0
+      if (s.progression.claimed.length < required) { toast(`🎯 Cobra ${required} misiones para abrir ${def.name}`); return }
       if (s.coins < def.cost) {
         toast(`🔒 Te faltan ${def.cost - s.coins} 🪙 para abrir ${def.name}. ¡Cuida mascotas!`)
         sfx.sad()
         return
       }
       const starters = makeLevelStarters(id)
+      const nextPets = {...s.pets}
+      for (const obj of starters.filter(isPetObj)) nextPets[obj.id] = makeRuntime()
       set({
+        pets:nextPets,challenge:null,
         coins: s.coins - def.cost,
         unlockedLevels: [...s.unlockedLevels, id],
         currentLevel: id,
@@ -566,7 +634,7 @@ export const useStudio = create<StudioState>((set, get) => {
         }
       }
       set({
-        mode: 'play',
+        mode: 'play', challenge:null,
         lastVoice: null, housePanel: null,
         pets,
         particles: [],
@@ -606,7 +674,7 @@ export const useStudio = create<StudioState>((set, get) => {
         state: rt.state === 'sleep' || rt.state === 'rest' ? rt.state : 'idle', wanderAt: now,
       }])) as Record<string, PetRuntime>
       set({
-        mode: 'edit',
+        mode: 'edit', challenge:null,
         lastVoice: null, housePanel: null,
         pets,
         particles: [],
@@ -709,7 +777,7 @@ export const useStudio = create<StudioState>((set, get) => {
       voiceEngine.stop()
       const blank = makeBlankProject()
       set({ objects: blank.objects, rules: blank.rules, coins: 0, selectedId: null,
-        careMissions:{alimentar:0,acariciar:0,banar:0},housePanel:null,lastVoice:null,ownerPoint:{x:50,y:84},
+        progression:freshProgression(),challenge:null,careMissions:{alimentar:0,acariciar:0,banar:0},housePanel:null,lastVoice:null,ownerPoint:{x:50,y:84},
         pets: {}, particles: [], say: {}, mode: 'edit', currentLevel: 'jardin',
         unlockedLevels: ['jardin'], event: null, ball: null, ballPending: false, ballPetId: null,
         ruleAcc: {}, actionCd: {}, shakeUntil: 0 })
@@ -903,7 +971,8 @@ export const useStudio = create<StudioState>((set, get) => {
         }
       }
 
-      if (action !== 'dormir' && action !== 'curar') {
+      const rewardEligible = rollProgress(s.progression).careRewards < 30
+      if (rewardEligible && action !== 'dormir' && action !== 'curar') {
         const rewards: Record<string, number> = {
           alimentar: 3,
           acariciar: 2,
@@ -918,8 +987,8 @@ export const useStudio = create<StudioState>((set, get) => {
       if (action === 'alimentar' || action === 'acariciar' || action === 'banar') {
         careMissions[action]++
         if (careMissions[action] === 3) {
-          careMissions[action] = 0; coins += 5
-          toast('🎯 ¡Misión de cuidado completada! +5 🪙')
+          careMissions[action] = 0; if (rewardEligible) coins += 5
+          toast(rewardEligible ? '🎯 ¡Misión de cuidado completada! +5 🪙' : '🎯 ¡Cuidado completado! Hoy alcanzaste el premio base diario')
         }
         rt.bonds = {...rt.bonds}
         for (const other of s.objects.filter(o => isPetObj(o) && o.id !== pet.id && o.level === pet.level && Math.hypot(o.x-pet.x,o.y-pet.y)<30)) {
@@ -928,7 +997,9 @@ export const useStudio = create<StudioState>((set, get) => {
           pets[other.id] = {...friend,bonds:{...friend.bonds,[pet.id]:Math.min(100,(friend.bonds[pet.id] ?? 0)+2)}}
         }
       }
-      set({ pets, coins, actionCd, careMissions })
+      const progress = xpGain ? recordProgress(s.progression, `care:${pet.level}`, pet.id) : rollProgress(s.progression)
+      const progression = {...progress,careRewards:progress.careRewards+(xpGain?1:0)}
+      set({ pets, coins, actionCd, careMissions, progression })
     },
 
     /** acariciar con el dedo: frotar la mascota en la pantalla */
@@ -950,7 +1021,11 @@ export const useStudio = create<StudioState>((set, get) => {
         coins += 10
         celebrateLevel(set, get, pet, lvPet)
       }
+      const progress=recordProgress(s.progression, `care:${pet.level}`, id)
+      if(progress.careRewards<30)coins+=2
+      const progression={...progress,careRewards:progress.careRewards+1}
       set({
+        progression,
         pets: { ...s.pets, [id]: rt },
         actionCd: { ...s.actionCd, [`${id}:caricia`]: now },
         ...(coins !== s.coins ? { coins } : {}),
@@ -1008,7 +1083,7 @@ export const useStudio = create<StudioState>((set, get) => {
 
     toggleBallMode: () => {
       const next = !get().ballPending
-      set({ ballPending: next,ballPetId:null })
+      set({ ballPending: next,ballPetId:null,challenge:null })
       if (next) {
         toast('🎾 ¡Toca el mundo donde quieras lanzar la pelota!', { duration: 3500 })
         sfx.click()
@@ -1183,7 +1258,7 @@ export const useStudio = create<StudioState>((set, get) => {
         if (chosen && (chosen.level !== s.currentLevel || pets[chosen.id]?.injured || pets[chosen.id]?.hospitalStatus === 'waiting' || pets[chosen.id]?.hospitalStatus === 'treating')) { answer(chosen,'Necesito estar aquí y sano para traer la pelota 🩹'); return 'ok' }
         if (chosen && pets[chosen.id]) { cancelChase(chosen.id); pets[chosen.id].obey=null; pets[chosen.id].inside=null; pets[chosen.id].state='idle'; pets[chosen.id].goTo=null }
         for (const p of targets) answer(p, '¡Listo para traer la pelota! 🎾')
-        set({ pets, actionCd, ballPending: true,ballPetId:chosen?.id ?? null }); toast('🎾 Toca el mundo para lanzar la pelota')
+        set({ pets, actionCd, ballPending: true,ballPetId:chosen?.id ?? null,challenge:null }); toast('🎾 Toca el mundo para lanzar la pelota')
         return 'ok'
       }
       if (kind === 'jump') sfx.jump()
@@ -1326,7 +1401,7 @@ export const useStudio = create<StudioState>((set, get) => {
       const toy = findSpecial(levelObjs, 'toy')
       const bath = findSpecial(levelObjs, 'bath')
       const water = findSpecial(levelObjs, 'water')
-      const raining = s.event?.kind === 'lluvia' && s.event.until > now && (s.currentLevel === 'jardin' || s.currentLevel === 'playa')
+      const raining = s.event?.kind === 'lluvia' && s.event.until > now && !['casa','hospital'].includes(s.currentLevel)
       const shelters = raining
         ? levelObjs.filter((o) => catalogById[o.catalogId]?.shelter)
         : []
@@ -1954,6 +2029,7 @@ export const useStudio = create<StudioState>((set, get) => {
       const pets: Record<string, PetRuntime> = { ...s.pets }
       let coins = s.coins
       let lastBonusAt = s.lastBonusAt
+      let progression = rollProgress(s.progression)
 
       // solo decaen las mascotas del mundo actual (las demás descansan)
       const activePets = s.objects.filter(
@@ -2006,7 +2082,7 @@ export const useStudio = create<StudioState>((set, get) => {
         if (kind === 'lluvia' || kind === 'regalo') vib(60)
       }
 
-      const raining = event?.kind === 'lluvia' && (s.currentLevel === 'jardin' || s.currentLevel === 'playa')
+      const raining = event?.kind === 'lluvia' && !['casa','hospital'].includes(s.currentLevel)
       const hungryDays = event?.kind === 'escasez'
       const butterfly = event?.kind === 'mariposa'
       const shelters = s.objects.filter(
@@ -2128,11 +2204,13 @@ export const useStudio = create<StudioState>((set, get) => {
       // bonus: todas las mascotas del mundo están felices
       const allPets = activePets.map((o) => pets[o.id]).filter(Boolean)
       if (
+        progression.wellnessRewards < 10 &&
         allPets.length > 0 &&
         allPets.every((rt) => rt.stats.felicidad >= 80) &&
         now - lastBonusAt > 12000
       ) {
         coins += 2
+        progression = {...progression,wellnessRewards:progression.wellnessRewards+1}
         lastBonusAt = now
         toast('🎉 ¡Todas las mascotas están felices! +2 🪙')
         sfx.coin()
@@ -2144,7 +2222,7 @@ export const useStudio = create<StudioState>((set, get) => {
         if (b.until > now) say[pid] = b
       }
 
-      set({ pets, coins, lastBonusAt, say, event, nextEventAt, shakeUntil })
+      set({ pets, coins, lastBonusAt, say, event, nextEventAt, shakeUntil, progression })
 
       // reglas del tipo "CADA X segundos..." (mascotas del mundo actual)
       const ruleAcc = { ...s.ruleAcc }
