@@ -7,11 +7,7 @@
     "build": "next build && cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",
-    "db:push": "prisma db push --accept-data-loss",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:reset": "prisma migrate reset",
-    "build:export": "EXPORT_MODE=1 next build && rm -rf out && mkdir out && cp -r .next-export/. out/ && test -f out/index.html && echo OK: sitio est\u00e1tico listo en out/",
+    "build:export": "EXPORT_MODE=1 next build && rm -rf out && mkdir out && cp -r .next-export/. out/ && test -f out/index.html && echo OK: sitio estático listo en out/",
     "test": "node --test tests/*.test.cjs",
     "typecheck": "tsc --noEmit"
   },
